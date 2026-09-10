@@ -57,6 +57,7 @@ supervisor-http-api
 agent-sessions
 zombie-sessions
 orphan-sessions
+tmux-server-binary
 bd-split-store
 beads-store
 v2-routed-to-namespace

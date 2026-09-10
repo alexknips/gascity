@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **gc pins one tmux binary, and `gc doctor` can now see when the server is on
+  a different one.** Every gc-managed tmux call used to resolve the binary
+  independently by name, so on a host with more than one tmux on PATH, which
+  control path ran decided which build drove the server — and a mismatched
+  client fails with "server exited unexpectedly", blaming the server for the
+  client's inability to speak its protocol. The binary now resolves once per
+  process, from `GC_TMUX_BIN` when set and PATH otherwise, and that exact path
+  is used everywhere, including the hidden-attach path that runs under a shell
+  whose PATH is not ours. The new `tmux-server-binary` check compares the
+  resolved client against the running server and fails on a version mismatch, on
+  a client that cannot query a server the socket proves is listening, and on a
+  server whose executable a package upgrade has unlinked — a server that keeps
+  working but can never be re-executed. The existing `tmux-binary` check only
+  resolves PATH, so it passed through all three. Failures are advisory: the
+  remediation is a repin or an operator-scheduled restart, and a tmux restart
+  drops every session it hosts. `docs/troubleshooting/tmux-binary-mismatch.md`
+  carries the drain-first restart procedure.
+
 - **`gc storage preflight` reports everything the infra-class cutover would
   refuse, from outside the window.** `gc storage migrate --from-work` runs its
   refusals with the fleet stopped, so an operator learned that a rig scope
