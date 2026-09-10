@@ -85,8 +85,23 @@ func (c *TmuxServerBinaryCheck) Run(_ *CheckContext) *CheckResult {
 	client := c.clientBinary()
 	server, err := c.inspectServer(ctx, c.socketName)
 	if errors.Is(err, sessiontmux.ErrNoServerSocket) {
+		// Nothing is listening where the socket should be. Before calling
+		// that healthy, ask the client whether it can reach a server
+		// anyway: if it can, this check looked in the wrong place, and
+		// reporting a pass would be the same "absent result reads as
+		// proof of absence" mistake the check exists to catch.
+		if version, probeErr := c.serverVersion(ctx, c.socketName); probeErr == nil {
+			r.Status = StatusWarning
+			r.Message = fmt.Sprintf(
+				"no tmux socket found for %s, but the client reached a server on it (tmux %s); "+
+					"this check cannot compare binaries", c.socketLabel(), version)
+			r.Details = []string{fmt.Sprintf("socket lookup: %v", err)}
+			r.FixHint = "TMUX_TMPDIR likely differs between the tmux server and this process"
+			return r
+		}
 		r.Status = StatusOK
 		r.Message = fmt.Sprintf("no tmux server on socket %s; client is %s", c.socketLabel(), client)
+		r.Details = []string{fmt.Sprintf("socket lookup: %v", err)}
 		return r
 	}
 	if err != nil {

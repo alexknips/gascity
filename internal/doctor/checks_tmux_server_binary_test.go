@@ -45,9 +45,29 @@ func TestTmuxServerBinaryCheckPassesWhenNoServerIsRunning(t *testing.T) {
 	c.inspectServer = func(context.Context, string) (*sessiontmux.ServerBinary, error) {
 		return nil, fmt.Errorf("%w: /tmp/tmux-1000/gc", sessiontmux.ErrNoServerSocket)
 	}
+	c.serverVersion = func(context.Context, string) (string, error) {
+		return "", errors.New("no server running on /tmp/tmux-1000/gc")
+	}
 	got := c.Run(&CheckContext{})
 	if got.Status != StatusOK {
 		t.Fatalf("Status = %v, want %v (message: %s)", got.Status, StatusOK, got.Message)
+	}
+}
+
+// TestTmuxServerBinaryCheckWarnsWhenSocketLookupDisagreesWithTheClient guards
+// the false pass: if the socket is not where this check looks but the client
+// reaches a server anyway, "no server" is a wrong answer, not a healthy one.
+func TestTmuxServerBinaryCheckWarnsWhenSocketLookupDisagreesWithTheClient(t *testing.T) {
+	c := newTestTmuxServerBinaryCheck()
+	c.inspectServer = func(context.Context, string) (*sessiontmux.ServerBinary, error) {
+		return nil, fmt.Errorf("%w: /tmp/tmux-1000/gc", sessiontmux.ErrNoServerSocket)
+	}
+	got := c.Run(&CheckContext{})
+	if got.Status != StatusWarning {
+		t.Fatalf("Status = %v, want %v (message: %s)", got.Status, StatusWarning, got.Message)
+	}
+	if !strings.Contains(got.Message, "reached a server") {
+		t.Fatalf("Message = %q, want it to say the client reached a server", got.Message)
 	}
 }
 
