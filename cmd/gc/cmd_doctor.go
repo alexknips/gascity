@@ -283,6 +283,13 @@ func buildDoctorChecks(cityPath string, cfg *config.City, cfgErr error, opts bui
 			register(doctor.NewZombieSessionsCheck(cfg, cityName, st, sp))
 			register(doctor.NewOrphanSessionsCheck(cfg, cityName, st, sp))
 		}
+		// The tmux-binary check above only resolves PATH, so it passes on a
+		// host whose client and server are different builds — the state that
+		// produces "server exited unexpectedly" crash loops. Compare the two
+		// directly, but only where tmux is actually the transport.
+		if usesTmuxSessions(cfg) {
+			register(doctor.NewTmuxServerBinaryCheck(tmuxSocketName(cfg, cityName)))
+		}
 	}
 
 	storeFactory := openStoreForCity(cityPath)
@@ -706,4 +713,27 @@ func openStoreResultForCity(cityPath string) func(string) (beads.StoreOpenResult
 	return func(dirPath string) (beads.StoreOpenResult, error) {
 		return openStoreResultAtForCity(dirPath, cityPath)
 	}
+}
+
+// usesTmuxSessions reports whether this city's sessions are backed by tmux.
+// An empty provider means tmux — see config.SessionConfig.Provider.
+func usesTmuxSessions(cfg *config.City) bool {
+	if cfg == nil {
+		return false
+	}
+	provider := strings.TrimSpace(cfg.Session.Provider)
+	return provider == "" || provider == config.SessionTransportTmux
+}
+
+// tmuxSocketName resolves the tmux socket the city's sessions live on. It
+// mirrors tmuxConfigFromSession: an unset socket defaults to the city name,
+// which is what gives each city its own tmux server.
+func tmuxSocketName(cfg *config.City, cityName string) string {
+	if cfg == nil {
+		return cityName
+	}
+	if cfg.Session.Socket != "" {
+		return cfg.Session.Socket
+	}
+	return cityName
 }

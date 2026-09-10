@@ -508,11 +508,33 @@ func TestHiddenAttachedClientCanSendText(t *testing.T) {
 func TestHiddenAttachScriptArgsArePlatformSpecific(t *testing.T) {
 	tmuxArgs := []string{"-u", "-L", "socket", "attach-session", "-t", "target"}
 
-	if got, want := hiddenAttachScriptArgs("darwin", tmuxArgs), []string{"-q", "/dev/null", "tmux", "-u", "-L", "socket", "attach-session", "-t", "target"}; !reflect.DeepEqual(got, want) {
+	if got, want := hiddenAttachScriptArgs("darwin", "tmux", tmuxArgs), []string{"-q", "/dev/null", "tmux", "-u", "-L", "socket", "attach-session", "-t", "target"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("darwin script args = %#v, want %#v", got, want)
 	}
-	if got, want := hiddenAttachScriptArgs("linux", tmuxArgs), []string{"-qfc", "tmux -u -L socket attach-session -t target", "/dev/null"}; !reflect.DeepEqual(got, want) {
+	if got, want := hiddenAttachScriptArgs("linux", "tmux", tmuxArgs), []string{"-qfc", "tmux -u -L socket attach-session -t target", "/dev/null"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("linux script args = %#v, want %#v", got, want)
+	}
+}
+
+// TestHiddenAttachScriptArgsCarryResolvedBinary pins the reason the binary is
+// threaded through at all: the hidden attach runs under a shell whose PATH is
+// not ours, so the resolved path must survive into the wrapped command on both
+// platforms, quoted where the shell would otherwise split it.
+func TestHiddenAttachScriptArgsCarryResolvedBinary(t *testing.T) {
+	tmuxArgs := []string{"-u", "-L", "socket", "attach-session", "-t", "target"}
+	const resolved = "/opt/home brew/bin/tmux"
+
+	darwin := hiddenAttachScriptArgs("darwin", resolved, tmuxArgs)
+	if got, want := darwin[2], resolved; got != want {
+		t.Fatalf("darwin script args binary = %q, want %q", got, want)
+	}
+
+	linux := hiddenAttachScriptArgs("linux", resolved, tmuxArgs)
+	if len(linux) != 3 {
+		t.Fatalf("linux script args = %#v, want 3 elements", linux)
+	}
+	if want := "'/opt/home brew/bin/tmux' -u -L socket attach-session -t target"; linux[1] != want {
+		t.Fatalf("linux script command = %q, want %q", linux[1], want)
 	}
 }
 

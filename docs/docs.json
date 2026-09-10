@@ -206,7 +206,8 @@
             "pages": [
               "troubleshooting/gc-start-walkthrough",
               "troubleshooting/dolt-bloat-recovery",
-              "troubleshooting/bd-backup-cleanup"
+              "troubleshooting/bd-backup-cleanup",
+              "troubleshooting/tmux-binary-mismatch"
             ]
           },
           {

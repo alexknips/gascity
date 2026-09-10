@@ -279,7 +279,7 @@ type executor interface {
 type realExecutor struct{}
 
 func (realExecutor) execute(args []string) (string, error) {
-	cmd := exec.Command("tmux", args...)
+	cmd := exec.Command(Binary(), args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -291,7 +291,7 @@ func (realExecutor) execute(args []string) (string, error) {
 }
 
 func (realExecutor) executeCtx(ctx context.Context, args []string) (string, error) {
-	cmd := exec.CommandContext(ctx, "tmux", args...)
+	cmd := exec.CommandContext(ctx, Binary(), args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -1237,7 +1237,7 @@ func (t *Tmux) SetExitEmpty(on bool) error {
 
 // IsAvailable checks if tmux is installed and can be invoked.
 func (t *Tmux) IsAvailable() bool {
-	cmd := exec.Command("tmux", "-V")
+	cmd := exec.Command(Binary(), "-V")
 	return cmd.Run() == nil
 }
 
@@ -1653,7 +1653,7 @@ func (t *Tmux) ensureHiddenAttachedClient(target string) error {
 		cmdArgs = append(cmdArgs, "-L", t.cfg.SocketName)
 	}
 	cmdArgs = append(cmdArgs, "attach-session", "-t", target)
-	cmd := exec.CommandContext(ctx, "script", hiddenAttachScriptArgs(goruntime.GOOS, cmdArgs)...)
+	cmd := exec.CommandContext(ctx, "script", hiddenAttachScriptArgs(goruntime.GOOS, Binary(), cmdArgs)...)
 	cmd.Env = append(cmd.Environ(), "TERM=xterm-256color")
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
@@ -1708,12 +1708,17 @@ func (t *Tmux) ensureHiddenAttachedClient(target string) error {
 	return nil
 }
 
-func hiddenAttachScriptArgs(goos string, tmuxArgs []string) []string {
+// hiddenAttachScriptArgs builds the `script` argv that wraps a hidden tmux
+// attach. tmuxBin must be the process-wide resolved tmux path from [Binary]:
+// the wrapped command runs through a shell whose PATH is not ours to control,
+// so a bare "tmux" here could resolve to a different build than the one
+// driving the server.
+func hiddenAttachScriptArgs(goos, tmuxBin string, tmuxArgs []string) []string {
 	if goos == "darwin" {
-		args := []string{"-q", "/dev/null", "tmux"}
+		args := []string{"-q", "/dev/null", tmuxBin}
 		return append(args, tmuxArgs...)
 	}
-	return []string{"-qfc", "tmux " + shellquote.Join(tmuxArgs), "/dev/null"}
+	return []string{"-qfc", shellquote.Join(append([]string{tmuxBin}, tmuxArgs...)), "/dev/null"}
 }
 
 func (t *Tmux) hiddenAttachClient(target string) *hiddenAttachClient {
@@ -4376,9 +4381,9 @@ func CurrentSessionName() string {
 	var out []byte
 	var err error
 	if pane != "" {
-		out, err = exec.Command("tmux", "display-message", "-t", pane, "-p", "#{session_name}").Output()
+		out, err = exec.Command(Binary(), "display-message", "-t", pane, "-p", "#{session_name}").Output()
 	} else {
-		out, err = exec.Command("tmux", "display-message", "-p", "#{session_name}").Output()
+		out, err = exec.Command(Binary(), "display-message", "-p", "#{session_name}").Output()
 	}
 	if err != nil {
 		return ""

@@ -67,6 +67,13 @@ func NewTmuxCarrier(conn ExecProvider, target string) Carrier {
 // tmux runs `tmux <args...>` in the box over the connection and returns its
 // standard output. A non-zero command exit is reported via err only when the
 // connection itself surfaces it; callers that are best-effort discard err.
+//
+// The command name stays unqualified on purpose. Unlike the local transport,
+// this executes inside the box, where the host's resolved tmux path (see
+// [tmux.Binary]) names a file that does not exist. The box image owns which
+// tmux serves its own client and server, and both live in the same image, so
+// the split-resolution hazard that pinning guards against locally cannot
+// arise here.
 func (c *tmuxCarrier) tmux(ctx context.Context, name string, args ...string) ([]byte, error) {
 	out, _, err := c.conn.Exec(ctx, name, append([]string{"tmux"}, args...))
 	return out, err
