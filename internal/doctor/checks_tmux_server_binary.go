@@ -156,7 +156,7 @@ func (c *TmuxServerBinaryCheck) Run(_ *CheckContext) *CheckResult {
 		if len(problems) > 1 {
 			r.Message = fmt.Sprintf("%s (+%d more)", problems[0], len(problems)-1)
 		}
-		r.Details = append(problems[1:], details...)
+		r.Details = append(append([]string{}, problems[1:]...), details...)
 		r.FixHint = tmuxServerBinaryFixHint
 		return r
 	}
@@ -224,11 +224,11 @@ func tmuxPathCandidates(pathEnv string) []string {
 		if err != nil || info.IsDir() || info.Mode().Perm()&0o111 == 0 {
 			continue
 		}
-		real := realPath(candidate)
-		if seen[real] {
+		resolved := realPath(candidate)
+		if seen[resolved] {
 			continue
 		}
-		seen[real] = true
+		seen[resolved] = true
 		out = append(out, candidate)
 	}
 	return out
