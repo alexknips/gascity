@@ -328,7 +328,7 @@ func resolveTemplate(p *agentBuildParams, cfgAgent *config.Agent, qualifiedName 
 	if exe, err := os.Executable(); err == nil && exe != "" {
 		agentEnv["GC_BIN"] = exe
 	}
-	sessionBackendEnv, err := sessionBackendEnvWithError(p.cityPath, rigRoot, p.rigs)
+	sessionBackendEnv, err := sessionBackendEnvWithError(p.cityPath, rigRoot, p.rigs, p.workspace)
 	if err != nil {
 		return TemplateParams{}, fmt.Errorf("agent %q: building session backend env: %w", qualifiedName, err)
 	}
@@ -800,7 +800,10 @@ func suppressStartupPromptForAgent(cfgAgent *config.Agent) bool {
 	return config.IsDeterministicControlDispatcher(cfgAgent)
 }
 
-func sessionBackendEnvWithError(cityPath, rigRoot string, rigs []config.Rig) (map[string]string, error) {
+// sessionBackendEnvWithError projects the beads backend environment tmux
+// publishes into an agent session. workspace is the caller's loaded
+// [workspace] section, or nil when it has none; see applyBdSchemaSkewOverride.
+func sessionBackendEnvWithError(cityPath, rigRoot string, rigs []config.Rig, workspace *config.Workspace) (map[string]string, error) {
 	env := map[string]string{
 		// Suppress bd's built-in Dolt auto-start. The gc controller manages
 		// the server; bd's CLI auto-start launches rogue servers from the
@@ -810,6 +813,12 @@ func sessionBackendEnvWithError(cityPath, rigRoot string, rigs []config.Rig) (ma
 	applyBdCLIRemoteSyncOptOut(env)
 	applyBdAutoBackupOptOut(env)
 	applyBdContributorRoutingOptOut(env)
+	// Agents run bd themselves, so the city's schema-skew posture has to reach
+	// their tmux environment too. tmux takes the projection literally: a key
+	// absent here leaves every agent prefixing the override by hand.
+	if err := applyBdSchemaSkewOverride(env, cityPath, workspace); err != nil {
+		return env, err
+	}
 	// Explicit empty values let tmux unset stale Dolt vars inherited from
 	// the server environment when the current city/rig does not use them.
 	setProjectedDoltEnvEmpty(env)

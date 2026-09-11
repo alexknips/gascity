@@ -136,21 +136,43 @@ func workspacePinnedBdBinary(cityPath string) (string, error) {
 // when changing either: this function decides whether a pin exists, that one
 // only applies a pin already decided here.
 func workspacePinnedBdBinaryOptional(cityPath string) (string, error) {
-	if _, err := os.Stat(filepath.Join(cityPath, "city.toml")); errors.Is(err, os.ErrNotExist) {
-		return "", nil
-	} else if err != nil {
+	env, ok, err := workspaceEnvForCity(cityPath)
+	if err != nil || !ok {
 		return "", err
 	}
-	// Resolving an executable is an environment-only operation. Use the
+	return workspacePinnedBdBinaryFromEnv(env)
+}
+
+// workspaceEnvForCity returns the expanded [workspace.env] map for cityPath.
+// The second result is false when cityPath holds no city.toml, which callers
+// must read as "this path configures nothing" rather than as an empty
+// workspace.env: the ambient BD_BIN fallback in workspacePinnedBdBinaryFromEnv
+// is reachable only in the second case, where an operator has a city but has
+// pinned nothing in it.
+func workspaceEnvForCity(cityPath string) (map[string]string, bool, error) {
+	if _, err := os.Stat(filepath.Join(cityPath, "city.toml")); errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	} else if err != nil {
+		return nil, false, err
+	}
+	// Reading workspace environment is an environment-only operation. Use the
 	// no-refresh loader here: the full loader rewrites the generated managed
 	// provider shim as a config-load side effect, which can race an in-flight
 	// lifecycle operation and replace a caller's already-selected provider
 	// entrypoint.
 	cfg, err := loadCityConfigWithoutBuiltinPackRefresh(cityPath, io.Discard)
 	if err != nil {
-		return "", err
+		return nil, false, err
 	}
-	env := expandEnvMap(cfg.Workspace.Env)
+	return expandEnvMap(cfg.Workspace.Env), true, nil
+}
+
+// workspacePinnedBdBinaryFromEnv resolves the pin from an already-loaded
+// workspace.env map. Separating resolution from the config load lets a single
+// load answer both halves of the managed bd posture — which executable to run,
+// and whether it may run against a skewed store — for the projections that
+// carry both.
+func workspacePinnedBdBinaryFromEnv(env map[string]string) (string, error) {
 	if raw := strings.TrimSpace(env["BD_BIN"]); raw != "" {
 		if !filepath.IsAbs(raw) {
 			return "", fmt.Errorf("workspace.env BD_BIN must be an absolute executable path")
@@ -1020,7 +1042,7 @@ var (
 var recoverManagedBDCommand = func(cityPath string) error {
 	script := gcBeadsBdScriptPath(cityPath)
 	overrides := cityRuntimeEnvMapForCity(cityPath)
-	if err := applyWorkspacePinnedBdBinary(overrides, cityPath); err != nil {
+	if err := applyWorkspaceBdEnv(overrides, cityPath); err != nil {
 		return err
 	}
 	setProjectedDoltEnvEmpty(overrides)
@@ -1704,7 +1726,7 @@ func bdRuntimeEnvWithErrorRecovery(cityPath string, allowRecovery bool) (map[str
 
 func bdRuntimeEnvWithErrorRecoveryContext(ctx context.Context, cityPath string, allowRecovery bool) (map[string]string, error) {
 	env := cityRuntimeEnvMapForCity(cityPath)
-	if err := applyWorkspacePinnedBdBinary(env, cityPath); err != nil {
+	if err := applyWorkspaceBdEnv(env, cityPath); err != nil {
 		return env, err
 	}
 	env["BEADS_DIR"] = filepath.Join(cityPath, ".beads")
@@ -1792,7 +1814,7 @@ func cityIdentityAnchorsForCity(cityPath string) map[string]string {
 func cityRuntimeProcessEnvWithError(cityPath string) ([]string, error) {
 	cityPath = normalizePathForCompare(cityPath)
 	overrides := cityRuntimeEnvMapForCity(cityPath)
-	if err := applyWorkspacePinnedBdBinary(overrides, cityPath); err != nil {
+	if err := applyWorkspaceBdEnv(overrides, cityPath); err != nil {
 		return nil, err
 	}
 	var projectionErr error
@@ -1851,23 +1873,96 @@ func cityRuntimeProcessEnvWithError(cityPath string) ([]string, error) {
 	return mergeRuntimeEnv(environ, overrides), projectionErr
 }
 
-// applyWorkspacePinnedBdBinary carries a valid workspace bd pin into
-// controller and provider subprocess environments. Workspace.env is otherwise
-// session-scoped configuration; BD_BIN is special because managed lifecycle
-// scripts must use the same schema-compatible executable before any worker
-// session exists.
-func applyWorkspacePinnedBdBinary(env map[string]string, cityPath string) error {
+// bdSchemaSkewOverrideEnvKey is bd's opt-in to keep serving a database whose
+// schema is ahead of the binary. It is the one BD_ posture key gc carries
+// without choosing the value: the opt-outs above force a constant because a
+// gc-managed bd must never auto-backup, auto-export or contributor-route,
+// whereas running against a skewed store is an operator's risk decision.
+//
+// bd binds this name under the BD_ prefix only — BEADS_IGNORE_SCHEMA_SKEW is
+// not an alias for it — so the single key is the whole contract.
+const bdSchemaSkewOverrideEnvKey = "BD_IGNORE_SCHEMA_SKEW"
+
+// applyWorkspaceBdEnv carries the workspace-declared bd posture into
+// controller and provider subprocess environments: the pinned executable and
+// the schema-skew override. Workspace.env is otherwise session-scoped
+// configuration; these two are special because managed lifecycle scripts must
+// agree on which bd to run, and on whether it may run at all, before any
+// worker session exists. One config load answers both.
+func applyWorkspaceBdEnv(env map[string]string, cityPath string) error {
 	if env == nil {
 		return nil
 	}
-	pinned, err := workspacePinnedBdBinaryOptional(cityPath)
+	workspace, ok, err := workspaceEnvForCity(cityPath)
 	if err != nil {
 		return err
 	}
-	if pinned != "" {
-		env["BD_BIN"] = pinned
+	if ok {
+		pinned, err := workspacePinnedBdBinaryFromEnv(workspace)
+		if err != nil {
+			return err
+		}
+		if pinned != "" {
+			env["BD_BIN"] = pinned
+		}
 	}
+	applyBdSchemaSkewOverrideFromWorkspace(env, workspace)
 	return nil
+}
+
+// applyBdSchemaSkewOverride is applyWorkspaceBdEnv's schema-skew half, for a
+// projection that must not also pin BD_BIN — the session environment, whose
+// agents resolve bd from their own PATH.
+//
+// workspace is the caller's already-loaded [workspace] section; passing it
+// keeps this off the config loader, which matters because the session
+// projection runs per agent per desired-state build. A nil workspace means the
+// caller holds no config and the city's own city.toml is read instead.
+func applyBdSchemaSkewOverride(env map[string]string, cityPath string, workspace *config.Workspace) error {
+	if env == nil {
+		return nil
+	}
+	if workspace != nil {
+		applyBdSchemaSkewOverrideFromWorkspace(env, expandEnvMap(workspace.Env))
+		return nil
+	}
+	loaded, _, err := workspaceEnvForCity(cityPath)
+	if err != nil {
+		return err
+	}
+	applyBdSchemaSkewOverrideFromWorkspace(env, loaded)
+	return nil
+}
+
+// applyBdSchemaSkewOverrideFromWorkspace projects the operator's schema-skew
+// posture — the city declaration first, the ambient environment second — and
+// projects nothing at all when neither sets it, leaving bd its own fail-closed
+// default.
+//
+// Projecting the key explicitly instead of leaving it to inheritance is the
+// fix for ga-ili. Two classes of gc-spawned bd never see an operator's shell.
+// The controller and the session reconciler are daemons whose environment was
+// captured at city start, so `BD_IGNORE_SCHEMA_SKEW=1 gc session reset` sets
+// the variable in a process that does not make the failing call — the bead
+// read happens controller-side. And a hook claim against a FEDERATED rig store
+// runs under beads.ExecCommandRunnerWithExactEnvContext with that rig's
+// projected store env: the runner replaces the child environment rather than
+// layering onto the parent, and the projection is a map built from config, so
+// nothing is inherited from the agent's own environment there. (The agent's
+// primary store is queried with an env derived from os.Environ, which is why
+// the ambient form worked at all.) A key present in the projection survives
+// every one of these.
+func applyBdSchemaSkewOverrideFromWorkspace(env, workspace map[string]string) {
+	if env == nil {
+		return
+	}
+	if value, ok := workspace[bdSchemaSkewOverrideEnvKey]; ok {
+		env[bdSchemaSkewOverrideEnvKey] = value
+		return
+	}
+	if value, ok := os.LookupEnv(bdSchemaSkewOverrideEnvKey); ok {
+		env[bdSchemaSkewOverrideEnvKey] = value
+	}
 }
 
 func applyBdCLIRemoteSyncOptOut(env map[string]string) {

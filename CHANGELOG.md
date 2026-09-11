@@ -95,6 +95,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A city can declare its bd schema-skew posture, so the override reaches the
+  processes that actually make the failing call.** When a beads database is
+  ahead of the `bd` binary, `BD_IGNORE_SCHEMA_SKEW=1` is the documented escape
+  hatch, and exporting it in a shell was assumed to cover every gc-spawned bd.
+  It does not. `gc session reset` performs its bead read inside the controller,
+  a daemon whose environment was captured at city start, so the operator set the
+  variable in a process that never makes the call and the reset failed with the
+  very schema-mismatch error the override suppresses — leaving an agent at its
+  context ceiling unable to recycle, which is the prescribed response to being
+  there. The same gap silently covered the session reconciler, the provider
+  lifecycle scripts, every agent's tmux environment, and the hook-claim
+  mutation, whose runner replaces the child environment with a projected map
+  rather than layering onto the parent and so drops an inherited value even from
+  the CLI. `BD_IGNORE_SCHEMA_SKEW` in `[workspace.env]` is now carried into all
+  of those projections alongside the existing `BD_BIN` pin, and an ambient value
+  is still honored when the city declares none. gc picks no value of its own: a
+  city that declares nothing and an operator who exports nothing project no key,
+  and bd keeps its fail-closed default.
+
 - **The work-record close gate asks the repository the bead's OWNER points at,
   not the store it was read through.** A rig's work step that a relocated class
   binding holds has its commits on the rig's checkout, and both close doors
