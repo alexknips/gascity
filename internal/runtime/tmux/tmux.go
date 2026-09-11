@@ -1709,10 +1709,10 @@ func (t *Tmux) ensureHiddenAttachedClient(target string) error {
 }
 
 // hiddenAttachScriptArgs builds the `script` argv that wraps a hidden tmux
-// attach. tmuxBin must be the process-wide resolved tmux path from [Binary]:
-// the wrapped command runs through a shell whose PATH is not ours to control,
-// so a bare "tmux" here could resolve to a different build than the one
-// driving the server.
+// attach. tmuxBin must be the resolved tmux path from [Binary]: the wrapped
+// command runs through a shell whose PATH is not ours to control, so a bare
+// "tmux" here could resolve to a different build than the one driving the
+// server.
 func hiddenAttachScriptArgs(goos, tmuxBin string, tmuxArgs []string) []string {
 	if goos == "darwin" {
 		args := []string{"-q", "/dev/null", tmuxBin}

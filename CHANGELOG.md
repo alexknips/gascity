@@ -14,10 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   independently by name, so on a host with more than one tmux on PATH, which
   control path ran decided which build drove the server — and a mismatched
   client fails with "server exited unexpectedly", blaming the server for the
-  client's inability to speak its protocol. The binary now resolves once per
-  process, from `GC_TMUX_BIN` when set and PATH otherwise, and that exact path
-  is used everywhere, including the hidden-attach path that runs under a shell
-  whose PATH is not ours. The new `tmux-server-binary` check compares the
+  client's inability to speak its protocol. Resolution now happens in one
+  place — `GC_TMUX_BIN` when set, PATH otherwise — and that exact path is used
+  everywhere, including the hidden-attach path that runs under a shell whose
+  PATH is not ours. The new `tmux-server-binary` check compares the
   resolved client against the running server and fails on a version mismatch, on
   a client that cannot query a server the socket proves is listening, and on a
   server whose executable a package upgrade has unlinked — a server that keeps

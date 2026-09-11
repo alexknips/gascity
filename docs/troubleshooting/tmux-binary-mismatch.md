@@ -32,10 +32,16 @@ Two conditions produce it:
 
 ## How gc pins the client
 
-Every gc-managed tmux invocation resolves the binary once per process and
-reuses that exact path, so a PATH change after startup cannot make a later call
-reach a different tmux. Set `GC_TMUX_BIN` to an absolute path to take PATH out
-of the decision entirely:
+Every gc-managed tmux invocation goes through one resolution point rather than
+naming `tmux` and letting each call site inherit whatever PATH it was handed.
+That includes the hidden-attach path, which runs under a shell whose PATH gc
+does not control.
+
+Resolution reads the environment on each call, so it always reflects the
+environment the process is actually in: gc will not go on execing a path that
+a package upgrade has since unlinked. The corollary is that PATH decides, and
+PATH is not something gc can vouch for. Set `GC_TMUX_BIN` to an absolute path
+to take PATH out of the decision entirely:
 
 ```bash
 export GC_TMUX_BIN=/home/linuxbrew/.linuxbrew/bin/tmux

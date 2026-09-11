@@ -2,6 +2,8 @@ package tmux
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -56,14 +58,73 @@ func TestResolveBinaryIgnoresEmptyLookPathResult(t *testing.T) {
 	}
 }
 
-// TestBinaryIsStable pins the caching contract. The whole point of resolving
-// once is that a later PATH change cannot make a subsequent gc call reach a
-// different tmux than the one already driving the server.
-func TestBinaryIsStable(t *testing.T) {
-	first := Binary()
-	t.Setenv("PATH", "/nonexistent")
-	if second := Binary(); second != first {
-		t.Fatalf("Binary() changed after PATH change: %q then %q", first, second)
+// TestBinaryHonoursThePinFromTheCurrentEnvironment pins the guarantee an
+// operator actually buys with GC_TMUX_BIN: the pinned path is what gc execs,
+// with no PATH involved and no earlier resolution remembered in its place.
+func TestBinaryHonoursThePinFromTheCurrentEnvironment(t *testing.T) {
+	t.Setenv(BinaryEnv, "/opt/first/tmux")
+	if got, want := Binary(), "/opt/first/tmux"; got != want {
+		t.Fatalf("Binary() = %q, want %q", got, want)
+	}
+	t.Setenv(BinaryEnv, "/opt/second/tmux")
+	if got, want := Binary(), "/opt/second/tmux"; got != want {
+		t.Fatalf("Binary() after repin = %q, want %q", got, want)
+	}
+}
+
+// TestBinaryDoesNotKeepReturningARemovedPath is the regression test for the
+// defect that made resolving once per process untenable. A resolved absolute
+// path can stop naming a file — a package upgrade unlinks the keg under a
+// long-lived process, a test's temporary directory is cleaned up — and a
+// remembered path would make every later call exec something that is gone.
+// The observed symptom was "fork/exec <removed dir>/tmux: no such file or
+// directory" in processes that had resolved tmux long before.
+func TestBinaryDoesNotKeepReturningARemovedPath(t *testing.T) {
+	t.Setenv(BinaryEnv, "")
+	dir := t.TempDir()
+	stub := filepath.Join(dir, DefaultBinary)
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write tmux stub: %v", err)
+	}
+	t.Setenv("PATH", dir)
+
+	if got := Binary(); got != stub {
+		t.Fatalf("Binary() = %q, want the stub at %q", got, stub)
+	}
+
+	if err := os.Remove(stub); err != nil {
+		t.Fatalf("remove tmux stub: %v", err)
+	}
+	if got := Binary(); got == stub {
+		t.Fatalf("Binary() = %q, want anything but the removed path", got)
+	}
+}
+
+// TestBinaryFollowsPathToALiveTmux is the other half of the same contract:
+// having dropped a path that disappeared, the next call must find whatever
+// tmux the current environment does name, not give up on the bare name.
+func TestBinaryFollowsPathToALiveTmux(t *testing.T) {
+	t.Setenv(BinaryEnv, "")
+	stale, live := t.TempDir(), t.TempDir()
+	staleStub := filepath.Join(stale, DefaultBinary)
+	liveStub := filepath.Join(live, DefaultBinary)
+	for _, stub := range []string{staleStub, liveStub} {
+		if err := os.WriteFile(stub, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+			t.Fatalf("write tmux stub %s: %v", stub, err)
+		}
+	}
+
+	t.Setenv("PATH", stale)
+	if got := Binary(); got != staleStub {
+		t.Fatalf("Binary() = %q, want %q", got, staleStub)
+	}
+
+	if err := os.Remove(staleStub); err != nil {
+		t.Fatalf("remove tmux stub: %v", err)
+	}
+	t.Setenv("PATH", live)
+	if got := Binary(); got != liveStub {
+		t.Fatalf("Binary() = %q, want the surviving tmux at %q", got, liveStub)
 	}
 }
 

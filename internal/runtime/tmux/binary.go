@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -28,28 +27,36 @@ const BinaryEnv = "GC_TMUX_BIN"
 // callers expect.
 const DefaultBinary = "tmux"
 
-var (
-	binaryOnce sync.Once
-	binaryPath string
-)
-
 // Binary returns the tmux executable that every gc-managed invocation must
-// use. It resolves once per process and caches the result, so a PATH change
-// after the first call — a re-exec'd shell, a supervisor restart writing a
-// different environment — cannot make a later gc call reach a different tmux
-// than the one that started the server.
+// use: the BinaryEnv pin when it is set, and the first tmux on PATH
+// otherwise. Callers must not fall back to the bare "tmux" string — doing so
+// reintroduces the split-resolution failure this function exists to prevent.
 //
-// Callers must not fall back to the bare "tmux" string. Doing so reintroduces
-// the split-resolution failure this function exists to prevent.
+// It answers from the environment on every call and deliberately keeps no
+// cache. Resolving is a handful of stat calls and every caller is about to
+// fork/exec tmux, so memoizing saves nothing measurable — while a remembered
+// absolute path goes permanently wrong the moment it stops naming a file. A
+// package upgrade that unlinks a keg under a long-lived supervisor or mayor
+// process would turn every later tmux call in it into fork/exec ENOENT, with
+// no recovery short of restarting the process. That is the same dead-keg
+// failure this binary pinning exists to catch, reintroduced one layer up, and
+// it is strictly worse than resolving again: the deleted path cannot work,
+// and PATH may well name a live tmux.
+//
+// Consistency comes from the environment instead, which is where it is
+// actually enforceable. Resolution is deterministic in its inputs, so a
+// process whose environment holds still sees one stable answer, and nothing
+// in gc rewrites its own PATH. For a guarantee that spans every control path,
+// including the ones gc does not own, pin BinaryEnv; the tmux-server-binary
+// doctor check reports a second tmux on PATH so an operator knows when that
+// is worth doing.
 func Binary() string {
-	binaryOnce.Do(func() {
-		binaryPath = resolveBinary(os.Getenv, exec.LookPath)
-	})
-	return binaryPath
+	return resolveBinary(os.Getenv, exec.LookPath)
 }
 
-// resolveBinary holds the resolution policy, separated from the cache so it
-// can be exercised directly.
+// resolveBinary holds the resolution policy. Binary passes the real os and
+// exec lookups; taking them as parameters lets the policy be exercised
+// without touching the process environment.
 func resolveBinary(getenv func(string) string, lookPath func(string) (string, error)) string {
 	if pinned := strings.TrimSpace(getenv(BinaryEnv)); pinned != "" {
 		return pinned
