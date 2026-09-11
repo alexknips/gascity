@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/gastownhall/gascity/internal/runtime"
 )
 
 // EnsureClaudeStateFile creates or updates HOME/.claude.json with the minimum
@@ -95,23 +97,11 @@ func EnsureClaudeProjectState(env *Env, projectPath string) error {
 	return nil
 }
 
+// claudeStatePaths returns the Claude state files these helpers write, using the
+// same resolution the production trust reader uses so fixtures and the
+// workspace-trust doctor check can never disagree about where trust lives.
 func claudeStatePaths(home, configDir string) []string {
-	seen := make(map[string]struct{}, 2)
-	var paths []string
-	add := func(path string) {
-		path = strings.TrimSpace(path)
-		if path == "" {
-			return
-		}
-		if _, ok := seen[path]; ok {
-			return
-		}
-		seen[path] = struct{}{}
-		paths = append(paths, path)
-	}
-	add(filepath.Join(home, ".claude.json"))
-	add(filepath.Join(configDir, ".claude.json"))
-	return paths
+	return runtime.ClaudeStateFilePaths(home, configDir)
 }
 
 func loadClaudeState(path string) (map[string]any, error) {
