@@ -52,6 +52,9 @@ const (
 	PreflightCheckIdentityMatch PreflightCheckID = "identity_match"
 	// PreflightCheckVersionCompat validates the bd CLI and linked beads library version.
 	PreflightCheckVersionCompat PreflightCheckID = "version_compat"
+	// PreflightCheckSchemaMigration validates that opening the native store
+	// would not migrate the scope's database schema.
+	PreflightCheckSchemaMigration PreflightCheckID = "schema_migration"
 	// PreflightCheckContractShape validates backend-specific metadata field shape.
 	PreflightCheckContractShape PreflightCheckID = "contract_shape"
 )
@@ -131,6 +134,8 @@ type PreflightDetails struct {
 	BDVersion             string                 `json:"bd_version,omitempty"`
 	BeadsLibraryVersion   string                 `json:"beads_library_version,omitempty"`
 	SchemaVersion         int                    `json:"schema_version,omitempty"`
+	DBSchemaVersion       int                    `json:"db_schema_version,omitempty"`
+	LinkedSchemaVersion   int                    `json:"linked_schema_version,omitempty"`
 	MetadataProjectID     string                 `json:"metadata_project_id,omitempty"`
 	DBProjectID           string                 `json:"db_project_id,omitempty"`
 	Expected              string                 `json:"expected,omitempty"`

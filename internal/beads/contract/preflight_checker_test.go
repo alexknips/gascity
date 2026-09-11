@@ -118,6 +118,10 @@ func TestPreflightEligibleOnUnreachableBDContextWhenIdentityVerified(t *testing.
 		DatabaseProjectID: func(string) (string, bool, error) {
 			return "gc-local", true, nil
 		},
+		DatabaseSchemaVersion: func(string) (int, bool, error) {
+			return 53, true, nil
+		},
+		LinkedSchemaVersion: 53,
 	}
 
 	result, err := checker.Check(scope)
@@ -162,6 +166,10 @@ func TestPreflightDegradesOnUnreachableBDContextWithoutIdentityProof(t *testing.
 		DatabaseProjectID: func(string) (string, bool, error) {
 			return "", false, nil
 		},
+		DatabaseSchemaVersion: func(string) (int, bool, error) {
+			return 53, true, nil
+		},
+		LinkedSchemaVersion: 53,
 	}
 
 	result, err := checker.Check(scope)
@@ -380,6 +388,10 @@ func TestPreflightUnreadableScopeReturnsError(t *testing.T) {
 		DatabaseProjectID: func(string) (string, bool, error) {
 			return "gc-local", true, nil
 		},
+		DatabaseSchemaVersion: func(string) (int, bool, error) {
+			return 53, true, nil
+		},
+		LinkedSchemaVersion: 53,
 	}
 
 	if _, err := checker.Check(scope); err == nil || !strings.Contains(err.Error(), "read preflight metadata") {
@@ -409,6 +421,10 @@ func testPreflightChecker(metadata string, ctx PreflightBDContext, dbProjectID s
 		DatabaseProjectID: func(string) (string, bool, error) {
 			return dbProjectID, dbProjectID != "", nil
 		},
+		DatabaseSchemaVersion: func(string) (int, bool, error) {
+			return 53, true, nil
+		},
+		LinkedSchemaVersion: 53,
 	}
 }
 
@@ -435,6 +451,7 @@ func assertCheckOrder(t *testing.T, result PreflightResult) {
 		PreflightCheckDoltModeSafe,
 		PreflightCheckIdentityMatch,
 		PreflightCheckVersionCompat,
+		PreflightCheckSchemaMigration,
 		PreflightCheckContractShape,
 	}
 	if len(result.Checks) != len(want) {
@@ -536,6 +553,12 @@ func TestCheckVersionCompatSourceBuild(t *testing.T) {
 // set must be invisible to the scopes the check already answered — a summary
 // drift here would change `gc doctor` output and the recorded fallback reason
 // for scopes that were never broken.
+//
+// The unconfirmable-library summary moved once, deliberately, in ga-o6k. It
+// used to read "bd/beads schema compatible", claiming a schema verdict this
+// check never reached: ctx.SchemaVersion is bd's JSON envelope version, not the
+// database's migration version. Schema state is now answered by
+// checkSchemaMigration, and this summary points at it instead of asserting it.
 func TestCheckVersionCompatSummariesAreStableWhereItAlreadyPassed(t *testing.T) {
 	validCtx := func(bdVersion string) PreflightBDContext {
 		return PreflightBDContext{Backend: "dolt", DoltMode: "server", BDVersion: bdVersion, SchemaVersion: 50}
@@ -550,7 +573,7 @@ func TestCheckVersionCompatSummariesAreStableWhereItAlreadyPassed(t *testing.T) 
 		{"unreachable bd context", "1.0.5", PreflightBDContext{}, errors.New("not a git repository"), "bd context is unreachable; cannot confirm bd/beads version compatibility"},
 		{"no schema version", "1.0.5", PreflightBDContext{BDVersion: "1.0.5"}, nil, "bd context did not report a schema version"},
 		{"missing bd version", "1.0.5", validCtx(""), nil, "bd/beads version compatibility could not be confirmed"},
-		{"source build", "(devel)", validCtx("1.0.5"), nil, "bd/beads schema compatible; linked library version unconfirmed (source build)"},
+		{"source build", "(devel)", validCtx("1.0.5"), nil, "bd/beads library versions not comparable; schema state is checked separately (source build)"},
 		{"matching releases", "1.0.5", validCtx("1.0.5"), nil, "bd and linked beads library versions match"},
 		{"confirmed mismatch", "1.0.5", validCtx("1.0.4"), nil, "bd version differs from linked beads library version"},
 	}
@@ -592,6 +615,10 @@ func TestPreflightEligibleOnReplacedBeadsModuleWithReadableBDContext(t *testing.
 		DatabaseProjectID: func(string) (string, bool, error) {
 			return "gc-local", true, nil
 		},
+		DatabaseSchemaVersion: func(string) (int, bool, error) {
+			return 53, true, nil
+		},
+		LinkedSchemaVersion: 53,
 	}
 
 	result, err := checker.Check(scope)
@@ -634,6 +661,10 @@ func TestPreflightBlocksOnRealVersionSkew(t *testing.T) {
 		DatabaseProjectID: func(string) (string, bool, error) {
 			return "gc-local", true, nil
 		},
+		DatabaseSchemaVersion: func(string) (int, bool, error) {
+			return 53, true, nil
+		},
+		LinkedSchemaVersion: 53,
 	}
 
 	result, err := checker.Check(scope)
@@ -711,6 +742,10 @@ func TestPreflightEligibleOnSemverCompatibleNewerBD(t *testing.T) {
 		DatabaseProjectID: func(string) (string, bool, error) {
 			return "gc-local", true, nil
 		},
+		DatabaseSchemaVersion: func(string) (int, bool, error) {
+			return 53, true, nil
+		},
+		LinkedSchemaVersion: 53,
 	}
 
 	result, err := checker.Check(scope)

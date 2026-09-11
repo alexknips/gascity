@@ -49,6 +49,22 @@ type PreflightChecker struct {
 	// replacement rather than a beads release. Set together with
 	// BeadsLibraryVersion; leaving both zero infers them from build info.
 	BeadsLibraryReplaced bool
+	// DatabaseSchemaVersion reads the beads schema migration version already
+	// applied to the scope's database. A nil reader cannot prove a native open
+	// would leave the schema alone, so the schema_migration check degrades the
+	// scope to BdStore rather than assuming it is safe.
+	DatabaseSchemaVersion func(scope string) (int, bool, error)
+	// LinkedSchemaVersion is the schema version the linked beads library was
+	// built against — beadsschema.LatestVersion() at the composition root.
+	// Opening the native store applies every migration between the database's
+	// applied version and this one, so it is the version a native open would
+	// leave behind. Zero means unknown.
+	LinkedSchemaVersion int
+	// AllowSchemaMigration disarms the schema_migration gate for a caller that
+	// deliberately intends to migrate this city's databases. It is the
+	// designated-migrator escape hatch, the local twin of beads' own
+	// BD_ALLOW_REMOTE_MIGRATE.
+	AllowSchemaMigration bool
 }
 
 // Check runs the beads backend preflight for scope and returns typed diagnostics.
@@ -66,6 +82,7 @@ func (c PreflightChecker) Check(scope string) (PreflightResult, error) {
 		c.checkDoltModeSafe(metadata, bdCtx, bdCtxErr),
 		c.checkIdentityMatch(scope, metadata),
 		c.checkVersionCompat(bdCtx, bdCtxErr),
+		c.checkSchemaMigration(scope),
 		c.checkContractShape(metadata),
 	}
 	verdict := preflightVerdictForChecks(checks)
@@ -266,11 +283,19 @@ func (c PreflightChecker) checkVersionCompat(ctx PreflightBDContext, err error) 
 		// released beads artifact. When the linked library does not — a source
 		// build, a replaced module, or a pseudo-version naming an untagged
 		// commit — the two strings can never be equal, and answering "mismatch"
-		// reports a verdict the check never had the evidence to reach. The
-		// schema version is validated above and is the real compatibility
-		// signal, so an unconfirmable library version must not take the native
-		// store offline; only a *confirmed* mismatch (below) should.
-		return NewPreflightCheckResult(PreflightCheckVersionCompat, PreflightCheckPass, "bd/beads schema compatible; linked library version unconfirmed ("+reason+")", details)
+		// reports a verdict the check never had the evidence to reach. So an
+		// unconfirmable library version must not take the native store offline;
+		// only a *confirmed* mismatch (below) should.
+		//
+		// Nothing here speaks to schema compatibility, and ctx.SchemaVersion
+		// cannot stand in for it: `bd context --json` reports no database
+		// schema version, so that field carries bd's JSON envelope version
+		// (the constant JSONSchemaVersion) and the guard above only
+		// establishes that the envelope parsed. Reading it as a schema verdict
+		// is what let a source-built gc migrate a live city (ga-o6k).
+		// checkSchemaMigration is the check that compares database schema
+		// state against the linked library.
+		return NewPreflightCheckResult(PreflightCheckVersionCompat, PreflightCheckPass, "bd/beads library versions not comparable; schema state is checked separately ("+reason+")", details)
 	}
 	if strings.TrimPrefix(ctx.BDVersion, "v") != libraryVersion {
 		if newerSemverCompatibleBD(ctx.BDVersion, libraryVersion) {
@@ -279,6 +304,79 @@ func (c PreflightChecker) checkVersionCompat(ctx PreflightBDContext, err error) 
 		return NewPreflightCheckResult(PreflightCheckVersionCompat, PreflightCheckFail, "bd version differs from linked beads library version", details)
 	}
 	return NewPreflightCheckResult(PreflightCheckVersionCompat, PreflightCheckPass, "bd and linked beads library versions match", details)
+}
+
+// checkSchemaMigration refuses a native open that would migrate the scope's
+// database schema, in either direction.
+//
+// Opening the native store hands the database to the linked beads library,
+// which applies every pending migration in-process before serving a single
+// query. In a Gas City that is a destructive act with no dry-run margin: one
+// managed Dolt server backs every database, and the binaries pointed at it are
+// of deliberately different vintage. gc pins beads at the bleeding-edge
+// BD_CURRENT_REF (TestBDVersionPins enforces that pin), while agents reach the
+// same databases through the installed, released bd CLI. So a gc built from a
+// tree whose pin has moved links migrations no installed bd understands, and
+// merely connecting migrates the store past the whole town. That is
+// gastownhall/gascity ga-o6k: a source-built gc migrated the live city from
+// schema v53 to v59 between 00:01:48Z and 00:03:32Z on 2026-09-11, after which
+// every beads-backed command town-wide failed with "database is at v59, binary
+// knows up to v53".
+//
+// beads has its own gate for the same hazard (schema.RemoteMigrateGateError),
+// but it fires only when the database has a Dolt remote configured — its
+// threat model is two clones forking through a shared remote. gc's managed
+// databases are local-only, so that gate returns early and never sees this.
+// The equivalent gate for a shared local server has to live here.
+//
+// A FAIL degrades the scope to BdStore, which reaches the database through the
+// installed bd binary and therefore cannot migrate past it either. The scope
+// keeps working; only the in-process fast path is withheld.
+func (c PreflightChecker) checkSchemaMigration(scope string) PreflightCheckResult {
+	details := PreflightDetails{LinkedSchemaVersion: c.LinkedSchemaVersion}
+	if c.AllowSchemaMigration {
+		return NewPreflightCheckResult(PreflightCheckSchemaMigration, PreflightCheckPass, "schema-migration gate disarmed by the designated migrator", details)
+	}
+	if c.DatabaseSchemaVersion == nil {
+		// Fail-safe: without the probe there is no evidence a native open
+		// would leave the schema alone, and the cost of being wrong is the
+		// whole city's ledger.
+		return NewPreflightCheckResult(PreflightCheckSchemaMigration, PreflightCheckWarn, "database schema version reader is not configured", details)
+	}
+	current, ok, err := c.DatabaseSchemaVersion(scope)
+	details.DBSchemaVersion = current
+	if err != nil || !ok {
+		// Mirrors checkIdentityMatch: the direct probe connects as root over
+		// plaintext and cannot authenticate an external hosted endpoint. Such
+		// a database is not this operator's local city and carries a remote of
+		// its own, so beads' own remote-migrate gate covers it; deferring here
+		// keeps external endpoints exactly as eligible as they are today.
+		if c.DeferIdentityToNativeOpen != nil && c.DeferIdentityToNativeOpen(scope) {
+			return NewPreflightCheckResult(PreflightCheckSchemaMigration, PreflightCheckPass, "schema migration deferred to native-open verification (external endpoint)", details)
+		}
+		return NewPreflightCheckResult(PreflightCheckSchemaMigration, PreflightCheckWarn, "database schema version could not be confirmed", details)
+	}
+	if current == 0 {
+		// No schema_migrations cursor: the database has never been migrated,
+		// so a native open bootstraps it rather than moving an existing city
+		// off a version the installed bd can read. beads' own gate treats
+		// version 0 the same way.
+		return NewPreflightCheckResult(PreflightCheckSchemaMigration, PreflightCheckPass, "database has no applied schema; a native open bootstraps it", details)
+	}
+	if c.LinkedSchemaVersion <= 0 {
+		return NewPreflightCheckResult(PreflightCheckSchemaMigration, PreflightCheckWarn, "linked beads library schema version is unknown", details)
+	}
+	if c.LinkedSchemaVersion > current {
+		return NewPreflightCheckResult(PreflightCheckSchemaMigration, PreflightCheckFail, fmt.Sprintf(
+			"opening the native store would migrate this database from schema v%d to v%d; only a designated migrator may move a city's schema",
+			current, c.LinkedSchemaVersion), details)
+	}
+	if current > c.LinkedSchemaVersion {
+		return NewPreflightCheckResult(PreflightCheckSchemaMigration, PreflightCheckFail, fmt.Sprintf(
+			"database schema v%d is ahead of the linked beads library (v%d); this binary cannot serve it",
+			current, c.LinkedSchemaVersion), details)
+	}
+	return NewPreflightCheckResult(PreflightCheckSchemaMigration, PreflightCheckPass, "database schema matches the linked beads library", details)
 }
 
 // newerSemverCompatibleBD reports whether bdVersion is a semver-compatible
@@ -516,6 +614,15 @@ func preflightRepairSteps(checks []PreflightCheckResult) []PreflightRepairStep {
 					Priority: PreflightRepairRecommended,
 					Command:  "bd doctor",
 					Note:     "Verify the installed bd CLI and linked beads library are compatible.",
+				})
+			}
+		case PreflightCheckSchemaMigration:
+			if check.State == PreflightCheckFail {
+				steps = append(steps, PreflightRepairStep{
+					CheckID:  check.ID,
+					Priority: PreflightRepairCritical,
+					Command:  "bd migrate",
+					Note:     "Migrate the city's databases deliberately, with one designated migrator, then bring every gc and bd binary on this host to the matching version. Never let an ad hoc build migrate them on connect.",
 				})
 			}
 		case PreflightCheckContractShape:

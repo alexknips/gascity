@@ -405,6 +405,13 @@ func factoryPreflightChecker(scope, metadata string, ctx contract.PreflightBDCon
 		DatabaseProjectID: func(string) (string, bool, error) {
 			return "gc-local", true, nil
 		},
+		// A database already at the version this binary would migrate to, so
+		// the schema-migration gate passes and each case below exercises the
+		// gate it actually names.
+		DatabaseSchemaVersion: func(string) (int, bool, error) {
+			return 53, true, nil
+		},
+		LinkedSchemaVersion: 53,
 	}
 }
 
