@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`gc doctor` now names the untrusted repository root behind a permanently
+  empty polecat pool.** Claude Code records workspace trust per project path,
+  and a pane opened on a root with no recorded acceptance gets the trust
+  prompt at startup; when the runtime's navigation of that prompt does not
+  apply, the pane takes the prompt's default and dies seconds in. Nothing
+  surfaces the cause: the controller respawns, the pool never reaches its
+  minimum, routed work never dispatches, and the rig reads as idle rather than
+  broken — a `gc rig add` on a repo root absent from `~/.claude.json` burned
+  seven spawns in eight minutes, and only a witness reading `start-stderr.log`
+  caught it. The new `workspace-trust-provisioned` check resolves every active
+  Claude-family agent's rig root and existing work dir to the git repository
+  root trust is keyed on, and warns for each root with no recorded acceptance,
+  naming the agents that open it. A work dir not yet created is skipped rather
+  than guessed, so unstarted pool slots do not each report a phantom root.
+  Detection only: the fix is to open each root once interactively and accept
+  the prompt, because recording trust means writing the operator's own Claude
+  Code state file while sessions are rewriting it. A state file that cannot be
+  read is reported as exactly that, never as "everything is trusted".
+
 - **gc pins one tmux binary, and `gc doctor` can now see when the server is on
   a different one.** Every gc-managed tmux call used to resolve the binary
   independently by name, so on a host with more than one tmux on PATH, which
