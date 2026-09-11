@@ -12,7 +12,6 @@ import (
 	"github.com/gastownhall/gascity/internal/fsys"
 	"github.com/gastownhall/gascity/internal/hooks"
 	"github.com/gastownhall/gascity/internal/suspensionstate"
-	workdirutil "github.com/gastownhall/gascity/internal/workdir"
 )
 
 type codexHooksDriftCheck struct {
@@ -30,7 +29,7 @@ func newCodexHooksDriftCheck(cityPath string, dirs []string) *codexHooksDriftChe
 
 func codexHookWorkDirs(cityPath string, cfg *config.City) []string {
 	var dirs []string
-	addCodexHookDir(&dirs, cityPath)
+	addDoctorWorkDir(&dirs, cityPath)
 	if cfg == nil {
 		return dirs
 	}
@@ -45,7 +44,7 @@ func codexHookWorkDirs(cityPath string, cfg *config.City) []string {
 			}
 			continue
 		}
-		addCodexHookDir(&dirs, rig.Path)
+		addDoctorWorkDir(&dirs, rig.Path)
 	}
 	for i := range cfg.Agents {
 		agent := &cfg.Agents[i]
@@ -55,7 +54,7 @@ func codexHookWorkDirs(cityPath string, cfg *config.City) []string {
 		if !agentUsesCodexHookSurface(cfg, agent) {
 			continue
 		}
-		addCodexHookAgentWorkDirs(&dirs, cityPath, cfg, agent)
+		addDoctorAgentWorkDirs(&dirs, cityPath, cfg, agent)
 	}
 	return dirs
 }
@@ -63,24 +62,10 @@ func codexHookWorkDirs(cityPath string, cfg *config.City) []string {
 func cleanCodexHookDirs(dirs []string) []string {
 	var cleaned []string
 	for _, dir := range dirs {
-		addCodexHookDir(&cleaned, dir)
+		addDoctorWorkDir(&cleaned, dir)
 	}
 	sort.Strings(cleaned)
 	return cleaned
-}
-
-func addCodexHookDir(dirs *[]string, dir string) {
-	dir = strings.TrimSpace(dir)
-	if dir == "" {
-		return
-	}
-	dir = filepath.Clean(dir)
-	for _, existing := range *dirs {
-		if existing == dir {
-			return
-		}
-	}
-	*dirs = append(*dirs, dir)
 }
 
 func agentUsesCodexHookSurface(cfg *config.City, agent *config.Agent) bool {
@@ -117,69 +102,6 @@ func codexHookProviderName(name string, providers map[string]config.ProviderSpec
 		return false
 	}
 	return name == "codex" || config.BuiltinFamily(name, providers) == "codex"
-}
-
-func addCodexHookAgentWorkDirs(dirs *[]string, cityPath string, cfg *config.City, agent *config.Agent) {
-	addCodexHookAgentWorkDir(dirs, cityPath, cfg, agent, agent.QualifiedName())
-	for _, slot := range codexHookPoolSlots(agent) {
-		instanceAgent, qualifiedInstance, _ := poolDesiredRequestIdentity(agent, slot)
-		if qualifiedInstance == agent.QualifiedName() {
-			continue
-		}
-		addCodexHookAgentWorkDir(dirs, cityPath, cfg, instanceAgent, qualifiedInstance)
-	}
-}
-
-func addCodexHookAgentWorkDir(dirs *[]string, cityPath string, cfg *config.City, agent *config.Agent, qualifiedName string) {
-	workDir, err := resolveCodexHookAgentWorkDir(cityPath, cfg, agent, qualifiedName)
-	if err != nil {
-		return
-	}
-	addCodexHookDir(dirs, workDir)
-}
-
-func resolveCodexHookAgentWorkDir(cityPath string, cfg *config.City, agent *config.Agent, qualifiedName string) (string, error) {
-	if agent == nil {
-		return "", nil
-	}
-	cityName := loadedCityName(cfg, cityPath)
-	var rigs []config.Rig
-	if cfg != nil {
-		rigs = cfg.Rigs
-	}
-	if strings.TrimSpace(qualifiedName) == "" {
-		qualifiedName = agent.QualifiedName()
-	}
-	workDir, err := workdirutil.ResolveWorkDirPathStrict(cityPath, cityName, qualifiedName, *agent, rigs)
-	if err != nil {
-		return "", err
-	}
-	if err := workdirutil.ValidateAncestorWorktreesNotStale(workDir); err != nil {
-		return "", err
-	}
-	return workDir, nil
-}
-
-func codexHookPoolSlots(agent *config.Agent) []int {
-	if agent == nil || !agent.SupportsInstanceExpansion() {
-		return nil
-	}
-	limit := 1
-	if len(agent.NamepoolNames) > 0 {
-		limit = len(agent.NamepoolNames)
-	} else if maxSessions := agent.EffectiveMaxActiveSessions(); maxSessions != nil {
-		if *maxSessions <= 1 {
-			return nil
-		}
-		limit = *maxSessions
-	} else if minSessions := agent.EffectiveMinActiveSessions(); minSessions > 1 {
-		limit = minSessions
-	}
-	slots := make([]int, 0, limit)
-	for slot := 1; slot <= limit; slot++ {
-		slots = append(slots, slot)
-	}
-	return slots
 }
 
 func (c *codexHooksDriftCheck) Name() string { return "codex-hooks-drift" }
