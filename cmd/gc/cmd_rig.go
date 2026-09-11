@@ -186,6 +186,19 @@ check remains informational.`,
 				fmt.Fprintln(stderr, msg) //nolint:errcheck // best-effort stderr
 				return errExit
 			}
+			// One positional (the path); the rig name rides --name. Extra
+			// positionals used to be dropped silently, which turned
+			// `gc rig add <name> <path>` into an add of $GC_CITY/<name>.
+			if msg, refused := rigAddLocalArgsRefusal(args); refused {
+				if jsonOutput {
+					if writeJSONError(stdout, stderr, "invalid_arguments", msg, 1) != 0 {
+						return errExit
+					}
+					return nil
+				}
+				fmt.Fprintln(stderr, msg) //nolint:errcheck // best-effort stderr
+				return errExit
+			}
 			if jsonOutput {
 				cityPath, err := resolveCity()
 				if err != nil {

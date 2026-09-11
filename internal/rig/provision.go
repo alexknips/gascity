@@ -27,7 +27,7 @@ import (
 //
 // The body reads as the provisioning pipeline; each numbered step delegates to a
 // helper below so this function stays a readable orchestration.
-func Provision(deps Deps, req ProvisionRequest) (config.Rig, ProvisionResult, error) {
+func Provision(deps Deps, req ProvisionRequest) (provisionedRig config.Rig, result ProvisionResult, err error) {
 	if err := validateDeps(deps); err != nil {
 		return config.Rig{}, ProvisionResult{}, err
 	}
@@ -41,7 +41,6 @@ func Provision(deps Deps, req ProvisionRequest) (config.Rig, ProvisionResult, er
 	rigPath := req.Path
 	tomlPath := filepath.Join(cityPath, "city.toml")
 
-	var result ProvisionResult
 	emit := func(step ProvisionStep) {
 		result.Steps = append(result.Steps, step)
 		if step.Warn {
@@ -100,9 +99,22 @@ func Provision(deps Deps, req ProvisionRequest) (config.Rig, ProvisionResult, er
 	}
 
 	// Step 10: create the rig directory when missing.
+	rigDirPreexisting := rigPathExists
 	if err := createRigDirIfMissing(fs, rigPath, rigPathExists); err != nil {
 		return config.Rig{}, result, err
 	}
+	// A directory this call created and then left empty is debris from a failed
+	// add, and leaving it behind is not neutral: a bare relative rig argument
+	// resolves against the city, so the debris lands at $GC_CITY/<name>, and the
+	// operator's natural retry with --adopt finds it, takes it for a real
+	// checkout, and registers it as the rig root (ga-lyl). Anything still inside
+	// it — including a bead store an earlier step could not roll back — means
+	// this is not provably only our debris, so it stays.
+	defer func() {
+		if err != nil {
+			removeRigDirIfCreatedAndEmpty(fs, rigPath, rigDirPreexisting)
+		}
+	}()
 
 	// Step 11: adopt validation, prefix-mismatch guard, fresh-add store guard.
 	if err := validateAdoptAndBeadsStore(deps, req, rigPath, plan); err != nil {
@@ -747,8 +759,9 @@ func rigBeadsStoreExists(fs fsys.FS, rigPath string) (bool, error) {
 
 // removePartialBeadsStore deletes the .beads/ a failed store init created and
 // returns the init error for the caller to surface. A store that predates this
-// add is never touched, and neither is the rig directory itself — that is the
-// user's repo, not ours to delete.
+// add is never touched. Emptying the directory is all this does; whether the
+// rig directory itself then goes is removeRigDirIfCreatedAndEmpty's call, and
+// only when this add created it.
 //
 // Without this, an init that wrote metadata.json before failing left a
 // directory that the next `gc rig add` reads as an initialized store and
@@ -763,6 +776,29 @@ func removePartialBeadsStore(fs fsys.FS, rigPath string, preexisting bool, cause
 		return fmt.Errorf("%w (removing partial bead store %s: %w)", cause, beadsPath, err)
 	}
 	return cause
+}
+
+// removeRigDirIfCreatedAndEmpty removes the rig directory when this Provision
+// call is the one that created it and nothing is left inside. It is best-effort
+// and deliberately silent: it runs on a path that already has a real failure to
+// report, and a directory it cannot remove is the same stray directory the
+// caller would have had anyway.
+//
+// Emptiness is the whole safety argument. Provision creates the directory with
+// MkdirAll and every later writer is rolled back before this runs, so an empty
+// directory can only be ours; a non-empty one may hold anything, and destroying
+// a user's content to tidy up a failed add is far worse than the debris.
+func removeRigDirIfCreatedAndEmpty(fs fsys.FS, rigPath string, preexisting bool) {
+	if preexisting {
+		return
+	}
+	entries, err := fs.ReadDir(rigPath)
+	if err != nil || len(entries) > 0 {
+		return
+	}
+	// Remove only ever deletes an empty directory, so it re-checks the guard
+	// above against a concurrent writer rather than trusting the ReadDir.
+	_ = fs.Remove(rigPath)
 }
 
 // rollbackError restores the topology snapshot and returns the fatal error the
