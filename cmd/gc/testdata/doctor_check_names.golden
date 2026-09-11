@@ -38,6 +38,7 @@ skill-dangling-sink
 order-firing-current
 order-outcome-healthy
 codex-hooks-drift
+workspace-trust-provisioned
 rig-pack-coverage
 pack-runtimes
 mcp-config
