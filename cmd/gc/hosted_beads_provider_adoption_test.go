@@ -379,7 +379,7 @@ func TestHostedBeadsAmbientNamespaceIsWithheldFromSessionsAndCommands(t *testing
 	cityPath := writeHostedBeadsCity(t, "https://beads.example", "gasworks", false)
 	writeCompleteStorageBinding(t, cityPath)
 
-	sessionEnv, err := sessionBackendEnvWithError(cityPath, "", nil)
+	sessionEnv, err := sessionBackendEnvWithError(cityPath, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

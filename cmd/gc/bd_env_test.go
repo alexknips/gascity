@@ -59,7 +59,7 @@ func envEntriesMap(entries []string) map[string]string {
 
 func mustSessionBackendEnv(t *testing.T, cityPath, rigRoot string, rigs []config.Rig) map[string]string {
 	t.Helper()
-	env, err := sessionBackendEnvWithError(cityPath, rigRoot, rigs)
+	env, err := sessionBackendEnvWithError(cityPath, rigRoot, rigs, nil)
 	if err != nil {
 		t.Fatalf("sessionBackendEnvWithError() error = %v", err)
 	}
@@ -387,7 +387,7 @@ func TestRuntimeEnvDelegatesCompleteStorageBindingToBd(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(rigPath, ".beads", "config.yaml"), []byte("gc.endpoint_origin: inherited_city\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	rigEnv, err := sessionBackendEnvWithError(cityPath, rigPath, []config.Rig{{Name: "remote", Path: rigPath}})
+	rigEnv, err := sessionBackendEnvWithError(cityPath, rigPath, []config.Rig{{Name: "remote", Path: rigPath}}, nil)
 	if err != nil {
 		t.Fatalf("sessionBackendEnvWithError(inherited rig): %v", err)
 	}
