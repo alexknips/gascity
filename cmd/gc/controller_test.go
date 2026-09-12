@@ -26,7 +26,7 @@ import (
 )
 
 func TestControllerLoopCancel(t *testing.T) {
-	setScopedBeadsProviderForTest(t, "", "file")
+	setIsolatedBeadsProviderForTest(t, "file")
 	sp := runtime.NewFake()
 	cfg := &config.City{Workspace: config.Workspace{Name: "test"}}
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.GoroutineRaceTimeout)
@@ -55,7 +55,7 @@ func TestControllerLoopCancel(t *testing.T) {
 }
 
 func TestControllerLoopTick(t *testing.T) {
-	setScopedBeadsProviderForTest(t, "", "file")
+	setIsolatedBeadsProviderForTest(t, "file")
 	sp := runtime.NewFake()
 	cfg := &config.City{Workspace: config.Workspace{Name: "test"}}
 	ctx, cancel := context.WithTimeout(context.Background(), testutil.GoroutineRaceTimeout)
@@ -84,6 +84,37 @@ func TestControllerLoopTick(t *testing.T) {
 	}
 	if strings.Contains(stderr.String(), "native_store_unavailable") {
 		t.Fatalf("controller loop selected the native store:\n%s", stderr.String())
+	}
+}
+
+// TestControllerLoopStoreResolutionStaysInsideIsolatedCity is the regression
+// guard for ga-8iq.
+//
+// controllerLoop leaves cr.cityPath empty when the caller supplies no tomlPath,
+// and the order-tracking retention watchdog passes that empty path straight
+// through to the store opener. Empty is not a no-op: it resolves the process's
+// working directory and walks up to the nearest city.toml. A test binary whose
+// package directory sits under a live city tree therefore resolved the
+// operator's real city, and the watchdog deleted closed order-tracking beads
+// out of it -- 100 deletions, each one a full re-read and re-parse of an ~88MB
+// store, which is where the 20-minute timeout came from.
+//
+// The invariant: under the controller tests' isolation, an empty store path
+// resolves to the throwaway city and nothing else.
+func TestControllerLoopStoreResolutionStaysInsideIsolatedCity(t *testing.T) {
+	cityDir := setIsolatedBeadsProviderForTest(t, "file")
+
+	if got := cityForStoreDir(""); got != cityDir {
+		t.Fatalf("cityForStoreDir(%q) = %q, want isolated city %q", "", got, cityDir)
+	}
+	if got := resolveStoreScopeRoot(cityForStoreDir(""), ""); got != cityDir {
+		t.Fatalf("resolveStoreScopeRoot(ambient city, %q) = %q, want isolated city %q", "", got, cityDir)
+	}
+	// The scope root is pinned, so the override still has to match -- an
+	// isolation that silently dropped GC_BEADS would send these tests to the
+	// city's configured backend instead of the in-temp-dir file store.
+	if got, ok := scopedBeadsProviderOverride(cityDir, cityDir); !ok || got != "file" {
+		t.Fatalf("scopedBeadsProviderOverride(isolated city) = (%q, %v), want (\"file\", true)", got, ok)
 	}
 }
 

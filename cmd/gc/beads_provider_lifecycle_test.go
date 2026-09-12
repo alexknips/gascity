@@ -43,10 +43,77 @@ func freeLoopbackPort(t *testing.T) string {
 	return strconv.Itoa(addr.Port)
 }
 
+// isolateAmbientCityForTest points every ambient city lookup at a throwaway
+// city directory and returns its path.
+//
+// Ambient resolution is the dangerous half of the provider override.
+// cityForStoreDir("") falls through to findCity(""), which resolves the
+// process's working directory and walks UP until it finds a city.toml. A unit
+// test binary run from a package directory that happens to sit under a live
+// city tree -- an agent worktree beneath the city root, for instance -- then
+// resolves the operator's real city and opens (and mutates, and deletes from)
+// its bead store. Pinning GC_CITY short-circuits that walk before it starts.
+func isolateAmbientCityForTest(t *testing.T) string {
+	t.Helper()
+	cityDir := normalizePathForCompare(t.TempDir())
+	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte(`[workspace]
+name = "isolated-test-city"
+`), 0o644); err != nil {
+		t.Fatalf("write isolated city.toml: %v", err)
+	}
+	t.Setenv("GC_CITY", cityDir)
+	return cityDir
+}
+
+// setScopedBeadsProviderForTest pins GC_BEADS to provider for the scope rooted
+// at scopeRoot, and isolates ambient city discovery for the duration of the
+// test.
+//
+// scopeRoot MUST be non-empty. An empty GC_BEADS_SCOPE_ROOT makes
+// scopedBeadsProviderOverride match ANY city unconditionally, so a test that
+// sets it is not confined to its own fixtures -- see ga-8iq, where two
+// controller-loop tests ran the order-tracking retention watchdog against the
+// operator's live city store and spent 20 minutes deleting from it. Tests that
+// genuinely need to exercise the unscoped branch call
+// setUnscopedBeadsProviderForTest instead, which says so at the call site and
+// still isolates the ambient city.
 func setScopedBeadsProviderForTest(t *testing.T, scopeRoot, provider string) {
 	t.Helper()
+	if strings.TrimSpace(scopeRoot) == "" {
+		t.Fatalf("setScopedBeadsProviderForTest: scopeRoot must be non-empty " +
+			"(an empty GC_BEADS_SCOPE_ROOT matches every city, including the operator's live one); " +
+			"pass t.TempDir(), or call setUnscopedBeadsProviderForTest if the test is about the unscoped branch")
+	}
+	isolateAmbientCityForTest(t)
 	t.Setenv("GC_BEADS", provider)
 	t.Setenv("GC_BEADS_SCOPE_ROOT", scopeRoot)
+}
+
+// setIsolatedBeadsProviderForTest is the fully-confined form: it creates a
+// throwaway city, pins ambient discovery to it, AND scopes GC_BEADS to it, so
+// every path the code under test can reach -- explicit or ambient -- lands in
+// the same temp directory. Tests that drive machinery which resolves its own
+// store (the controller loop and its watchdogs) want this one. It returns the
+// isolated city's path.
+func setIsolatedBeadsProviderForTest(t *testing.T, provider string) string {
+	t.Helper()
+	cityDir := isolateAmbientCityForTest(t)
+	t.Setenv("GC_BEADS", provider)
+	t.Setenv("GC_BEADS_SCOPE_ROOT", cityDir)
+	return cityDir
+}
+
+// setUnscopedBeadsProviderForTest is setScopedBeadsProviderForTest for the
+// tests whose subject IS the unscoped override -- GC_BEADS set with no
+// GC_BEADS_SCOPE_ROOT, the "ambient provider" configuration. Callers must pass
+// every city and scope path to the code under test explicitly; ambient
+// discovery is pinned to a throwaway city so an accidental fallthrough lands
+// there instead of on a real store.
+func setUnscopedBeadsProviderForTest(t *testing.T, provider string) {
+	t.Helper()
+	isolateAmbientCityForTest(t)
+	t.Setenv("GC_BEADS", provider)
+	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 }
 
 func TestScopeHasCompleteStorageBinding(t *testing.T) {

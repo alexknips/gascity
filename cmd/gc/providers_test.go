@@ -301,7 +301,7 @@ provider = "file"
 	if err := os.WriteFile(filepath.Join(cityDir, ".beads", "metadata.json"), []byte(`{"database":"dolt","backend":"dolt","dolt_mode":"server","dolt_database":"gc"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	setScopedBeadsProviderForTest(t, "", "file")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	if got := authoritativeBeadsProviderForScope(cityDir, cityDir); got != "bd" {
 		t.Fatalf("authoritativeBeadsProviderForScope(cityRoot) = %q, want bd metadata to outrank unscoped ambient GC_BEADS=file", got)
