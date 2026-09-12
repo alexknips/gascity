@@ -316,6 +316,17 @@ func evade() {
 	if err != nil { return }
 }
 `,
+		"provider use after guarded else": `package main
+func evade() {
+	provider, err := newSessionProvider()
+	if err != nil {
+		register(errorCheck(err))
+	} else {
+		register(sessionsCheck(provider))
+	}
+	use(provider)
+}
+`,
 	}
 	for name, source := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -336,6 +347,29 @@ func allowed() error {
 `)
 	if len(census.violations) != 0 {
 		t.Fatalf("immediate error check violations = %q", census.violations)
+	}
+}
+
+// buildDoctorChecks registers the construction failure as one error check and
+// uses the provider only in the else branch, then appends unrelated checks
+// after the guard. That trailing statement must not read as an unguarded
+// construction error (ga-8s3).
+func TestProviderFactoryCensusAllowsGuardedElseFollowedByUnrelatedStatements(t *testing.T) {
+	census := scanProviderFactoryFixture(t, "fixture.go", `package main
+func allowed() {
+	provider, err := newSessionProvider()
+	if err != nil {
+		register(errorCheck(err))
+	} else {
+		register(sessionsCheck(provider))
+	}
+	if usesTmuxSessions(cfg) {
+		register(tmuxServerBinaryCheck())
+	}
+}
+`)
+	if len(census.violations) != 0 {
+		t.Fatalf("guarded else with trailing statements violations = %q", census.violations)
 	}
 }
 
@@ -562,10 +596,22 @@ func hasImmediateProviderErrorGuard(assign *ast.AssignStmt, providerName, errorN
 	}
 	// buildDoctorChecks intentionally converts construction failure into one
 	// registered error check and confines every provider use to the else branch.
-	// A short declaration plus a final if/else in the same statement sequence
-	// proves the possibly-nil provider cannot escape that branch.
-	_, hasElseBlock := guard.Else.(*ast.BlockStmt)
-	return hasElseBlock && assign.Tok == token.DEFINE && index+1 == len(statements)-1
+	// A short declaration scopes the provider to this statement sequence, so
+	// the possibly-nil binding cannot escape the else branch as long as no
+	// later statement in the sequence names it. Prove that property directly
+	// instead of requiring the guard to be the sequence's last statement: a
+	// positional proof breaks the moment an unrelated check is appended after
+	// the guard, which reads as an unguarded construction error even though
+	// the provider is still confined (ga-8s3).
+	if _, hasElseBlock := guard.Else.(*ast.BlockStmt); !hasElseBlock || assign.Tok != token.DEFINE {
+		return false
+	}
+	for _, statement := range statements[index+2:] {
+		if providerNameReferenced(statement, providerName) {
+			return false
+		}
+	}
+	return true
 }
 
 func providerStatementSequence(statement ast.Stmt, parents map[ast.Node]ast.Node) ([]ast.Stmt, int, bool) {
