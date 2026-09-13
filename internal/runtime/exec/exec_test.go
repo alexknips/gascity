@@ -1534,6 +1534,14 @@ esac
 // returned, so WaitDelay would force-kill the shell before its rollback trap
 // ran and the resource the adapter created would leak. Signaling the process
 // group unblocks the child so the trap runs inside the grace window.
+//
+// The foreground child writes the readiness marker itself, from a fresh shell
+// that then execs sleep. A marker written by the trapping shell before it
+// forks the child lets cancellation land between fork and exec, while the
+// child still carries the parent's trap handler: the child swallows SIGINT,
+// execs a sleep that never saw it, and the parent's deferred trap loses to the
+// WaitDelay kill. A marker from a process that has already exec'd proves the
+// child has default SIGINT disposition, so the group interrupt always ends it.
 func TestProvider_StartCancellationInterruptsForegroundChild(t *testing.T) {
 	dir := t.TempDir()
 	readyFile := filepath.Join(dir, "ready")
@@ -1542,8 +1550,7 @@ func TestProvider_StartCancellationInterruptsForegroundChild(t *testing.T) {
 case "$1" in
   start)
     trap 'printf "%%s\n" interrupted > "%s"; exit 0' INT
-    : > "%s"
-    sleep 30
+    sh -c ': > "$1"; exec sleep 30' sh "%s"
     ;;
   *) exit 2 ;;
 esac
