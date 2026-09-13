@@ -563,11 +563,10 @@ func TestConvoyStatusJSONReportsDanglingTracks(t *testing.T) {
 
 func TestConvoyListAndStatusJSONCommands(t *testing.T) {
 	cityDir := t.TempDir()
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("GC_CITY", cityDir)
 	t.Setenv("GC_CITY_PATH", "")
 	t.Setenv("GC_CITY_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"test-city\"\n"), 0o644); err != nil {
 		t.Fatalf("write city.toml: %v", err)
 	}
@@ -713,8 +712,7 @@ provider = "file"
 }
 
 func TestConvoyStoreCandidatesIncludeMarkedFileRigUnderLegacyFileCity(t *testing.T) {
-	t.Setenv("GC_BEADS", "")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "")
 
 	cityDir := t.TempDir()
 	rigDir := filepath.Join(cityDir, "hello-world")
@@ -1998,9 +1996,8 @@ func writeConvoyTestCity(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(cityPath, ".gc"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("GC_CITY_PATH", cityPath)
+	setUnscopedBeadsProviderForTest(t, "file")
 	cityToml := `[workspace]
 name = "test-city"
 

@@ -1005,12 +1005,10 @@ name = "demo"
 	// `.beads/redirect` in the ambient working tree doesn't surface here.
 	setCwd(t, cityDir)
 	t.Setenv("GC_CITY_PATH", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	// Clear any inherited scope pin so the GC_BEADS override applies to
-	// this test's city. When run from a polecat session, the ambient
-	// GC_BEADS_SCOPE_ROOT points at the rig repo and would suppress the
-	// override before the provider check could fire.
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	// An unscoped override applies to this test's city; a scope pin elsewhere
+	// would suppress it before the provider check could fire. The helper keeps
+	// the GC_CITY_PATH pin above.
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	var stdout, stderr bytes.Buffer
 	if got := doBd([]string{"list"}, &stdout, &stderr); got == 0 {
@@ -1905,8 +1903,7 @@ set -eu
 	origPath := os.Getenv("PATH")
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+origPath)
 	t.Setenv("CAPTURE_PATH", capture)
-	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "bd")
 	t.Setenv("GC_DOLT_PORT", "9999")
 
 	var stdout, stderr bytes.Buffer

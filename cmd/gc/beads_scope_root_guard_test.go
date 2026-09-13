@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -55,6 +56,114 @@ func TestCmdGCTestsClearBeadsScopeRootOnlyThroughIsolationHelpers(t *testing.T) 
 			"or setUnscopedBeadsProviderForTest instead:\n  %s",
 			len(offenders), strings.Join(offenders, "\n  "))
 	}
+}
+
+// beadsProviderHelpersThatKeepCityPins are the helpers that must leave a city
+// pin the test already set.
+var beadsProviderHelpersThatKeepCityPins = []struct {
+	name  string
+	apply func(t *testing.T)
+}{
+	{
+		name:  "scoped",
+		apply: func(t *testing.T) { setScopedBeadsProviderForTest(t, t.TempDir(), "file") },
+	},
+	{
+		name:  "unscoped",
+		apply: func(t *testing.T) { setUnscopedBeadsProviderForTest(t, "file") },
+	},
+}
+
+// TestBeadsProviderHelpersKeepExplicitCityPin: GC_CITY wins over GC_CITY_PATH
+// and GC_CITY_ROOT, so a throwaway GC_CITY written over a test's own pin would
+// point that test at an empty city (ga-bvv).
+func TestBeadsProviderHelpersKeepExplicitCityPin(t *testing.T) {
+	for _, helper := range beadsProviderHelpersThatKeepCityPins {
+		for _, key := range explicitCityPinEnvKeys {
+			t.Run(helper.name+"/"+key, func(t *testing.T) {
+				clearExplicitCityPinsForTest(t)
+				cityDir := writeHelperPinTestCity(t)
+				t.Setenv(key, cityDir)
+
+				helper.apply(t)
+
+				for _, other := range explicitCityPinEnvKeys {
+					want := ""
+					if other == key {
+						want = cityDir
+					}
+					if got := os.Getenv(other); got != want {
+						t.Errorf("%s = %q after helper, want %q", other, got, want)
+					}
+				}
+				got, ok := resolveExplicitCityPathEnv()
+				if !ok || !samePath(got, cityDir) {
+					t.Fatalf("resolveExplicitCityPathEnv() = %q, %v; want %q, true", got, ok, cityDir)
+				}
+			})
+		}
+	}
+}
+
+// TestBeadsProviderHelpersPinThrowawayCityWhenUnpinned: with no city pin the
+// cwd walk is the fallback, so every helper must pin a throwaway city.
+func TestBeadsProviderHelpersPinThrowawayCityWhenUnpinned(t *testing.T) {
+	for _, helper := range beadsProviderHelpersThatKeepCityPins {
+		t.Run(helper.name, func(t *testing.T) {
+			clearExplicitCityPinsForTest(t)
+
+			helper.apply(t)
+
+			assertThrowawayCityPinned(t)
+		})
+	}
+}
+
+// TestSetIsolatedBeadsProviderForTestReplacesExplicitCityPin: the fully
+// confined form scopes GC_BEADS to its own city, so it must pin that city even
+// over a pin the test already set.
+func TestSetIsolatedBeadsProviderForTestReplacesExplicitCityPin(t *testing.T) {
+	clearExplicitCityPinsForTest(t)
+	t.Setenv("GC_CITY_PATH", writeHelperPinTestCity(t))
+
+	isolated := setIsolatedBeadsProviderForTest(t, "file")
+
+	got := assertThrowawayCityPinned(t)
+	if !samePath(got, isolated) {
+		t.Fatalf("resolveExplicitCityPathEnv() = %q, want isolated city %q", got, isolated)
+	}
+}
+
+func clearExplicitCityPinsForTest(t *testing.T) {
+	t.Helper()
+	for _, key := range explicitCityPinEnvKeys {
+		t.Setenv(key, "")
+	}
+}
+
+func writeHelperPinTestCity(t *testing.T) string {
+	t.Helper()
+	cityDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"pinned-test-city\"\n"), 0o644); err != nil {
+		t.Fatalf("write pinned city.toml: %v", err)
+	}
+	return cityDir
+}
+
+func assertThrowawayCityPinned(t *testing.T) string {
+	t.Helper()
+	got, ok := resolveExplicitCityPathEnv()
+	if !ok {
+		t.Fatal("resolveExplicitCityPathEnv() found no city pin; the cwd walk would decide the city")
+	}
+	data, err := os.ReadFile(filepath.Join(got, "city.toml"))
+	if err != nil {
+		t.Fatalf("read pinned city.toml: %v", err)
+	}
+	if !strings.Contains(string(data), `name = "isolated-test-city"`) {
+		t.Fatalf("pinned city %q is not the throwaway city; city.toml:\n%s", got, data)
+	}
+	return got
 }
 
 func TestRawEmptyBeadsScopeRootClearsDetector(t *testing.T) {

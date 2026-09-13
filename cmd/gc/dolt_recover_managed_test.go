@@ -465,8 +465,7 @@ func setupRecoveryTestCity(t *testing.T) string {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	t.Setenv("GC_DOLT_PASSWORD", "test")
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	return cityPath
 }
 

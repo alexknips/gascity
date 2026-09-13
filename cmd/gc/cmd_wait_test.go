@@ -201,8 +201,7 @@ type waitLookupLimitStore struct {
 
 func setWaitTestFileBeads(t *testing.T) {
 	t.Helper()
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 }
 
 func TestWaitListJSON(t *testing.T) {

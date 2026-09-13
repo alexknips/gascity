@@ -17,8 +17,7 @@ import (
 
 func TestDirectJSONWriterPayloadsValidateDeclaredSchemas(t *testing.T) {
 	clearGCEnv(t)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityPath := t.TempDir()
 	writeManagementJSONTestCity(t, cityPath, "[workspace]\nname = \"test-city\"\n")

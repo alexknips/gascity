@@ -193,10 +193,9 @@ func TestPrimeInjectMailContentSurfacesUnreadMailForPromptlessWake(t *testing.T)
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
 		t.Fatalf("write city.toml: %v", err)
 	}
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("GC_CITY", cityDir)
 	t.Setenv("GC_CITY_PATH", cityDir)
+	setUnscopedBeadsProviderForTest(t, "file")
 	t.Setenv("GC_ALIAS", "mayor")
 
 	// No unread mail yet: a promptless wake must inject nothing.
@@ -1340,8 +1339,7 @@ func withPrimeHookStdin(t *testing.T) {
 func createPrimeHookSession(t *testing.T, cityDir, sessionName, template string) string {
 	t.Helper()
 
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	store, err := openCityStoreAt(cityDir)
 	if err != nil {
 		t.Fatalf("openCityStoreAt(%s): %v", cityDir, err)

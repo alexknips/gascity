@@ -83,8 +83,7 @@ func e2c1ProviderFailureChildEnv(extra ...string) []string {
 
 func writeE2c1ProviderFailureCity(t *testing.T) string {
 	t.Helper()
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityPath := t.TempDir()
 	rigPath := filepath.Join(cityPath, "rigs", "frontend")
@@ -122,8 +121,7 @@ func runE2c1ProviderFailureHelper(t *testing.T, cityPath, markerPath string) {
 		}
 	}()
 
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	t.Setenv("GC_BOOTSTRAP", "skip")
 	t.Setenv("GC_CITY", cityPath)
 	t.Setenv("GC_CITY_PATH", cityPath)

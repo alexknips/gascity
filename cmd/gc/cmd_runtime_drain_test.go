@@ -174,8 +174,7 @@ func e2b2ProviderFailureChildEnv(extra ...string) []string {
 
 func writeE2b2ProviderFailureCity(t *testing.T) (string, string) {
 	t.Helper()
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityPath := t.TempDir()
 	rigPath := filepath.Join(cityPath, "rigs", "frontend")
@@ -231,10 +230,9 @@ func runE2b2ProviderFailureHelper(t *testing.T, cityPath, sessionID, markerPath 
 			t.Errorf("write run-return marker: %v", err)
 		}
 	}()
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("GC_CITY", cityPath)
 	t.Setenv("GC_CITY_PATH", cityPath)
+	setUnscopedBeadsProviderForTest(t, "file")
 	t.Setenv("GC_CEILING_DIRECTORIES", filepath.Dir(cityPath))
 	t.Setenv("GC_SESSION", "broken")
 	t.Setenv("GC_ALIAS", "worker")
@@ -1414,8 +1412,7 @@ func TestDrainAckNoArgsFallsBackToCityPathEnv(t *testing.T) {
 	// guards its siblings in this file use — otherwise the read provisions a
 	// managed Dolt server the test never tears down.
 	disableManagedDoltRecoveryForTest(t)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(cityDir, ".gc"), 0o755); err != nil {

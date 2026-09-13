@@ -15,8 +15,7 @@ import (
 )
 
 func TestBuildDoctorChecksOrderFiringCurrentUsesOrderRunHistory(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	t.Chdir(cityDir)

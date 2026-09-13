@@ -260,10 +260,9 @@ func TestCmdHandoffAutoSendsMailWithoutBlocking(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
 		t.Fatalf("write city.toml: %v", err)
 	}
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("GC_CITY", cityDir)
 	t.Setenv("GC_CITY_PATH", cityDir)
+	setUnscopedBeadsProviderForTest(t, "file")
 	t.Setenv("GC_ALIAS", "mayor")
 	t.Setenv("GC_SESSION_NAME", "mayor")
 
@@ -308,10 +307,9 @@ func TestCmdHandoffAutoHookFormatCodex(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
 		t.Fatalf("write city.toml: %v", err)
 	}
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("GC_CITY", cityDir)
 	t.Setenv("GC_CITY_PATH", cityDir)
+	setUnscopedBeadsProviderForTest(t, "file")
 	t.Setenv("GC_ALIAS", "mayor")
 	t.Setenv("GC_SESSION_NAME", "mayor")
 
@@ -375,10 +373,9 @@ func TestCmdHandoffAutoUsesDefaultSubject(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
 		t.Fatalf("write city.toml: %v", err)
 	}
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("GC_CITY", cityDir)
 	t.Setenv("GC_CITY_PATH", cityDir)
+	setUnscopedBeadsProviderForTest(t, "file")
 	t.Setenv("GC_ALIAS", "mayor")
 	t.Setenv("GC_SESSION_NAME", "mayor")
 
@@ -684,10 +681,9 @@ func TestCmdHandoff_Regression744_NamedSessionReturnsWithoutBlocking(t *testing.
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
 		t.Fatalf("write city.toml: %v", err)
 	}
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("GC_CITY", cityDir)
 	t.Setenv("GC_CITY_PATH", cityDir)
+	setUnscopedBeadsProviderForTest(t, "file")
 	t.Setenv("GC_ALIAS", "mayor")
 	t.Setenv("GC_SESSION_NAME", "mayor")
 
@@ -930,8 +926,7 @@ func TestHandoffRemoteNotRunning(t *testing.T) {
 }
 
 func TestCmdHandoffRemoteDefaultSenderFallsBackToGCAliasWhenSessionIDMissing(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	t.Setenv("GC_MAIL", "")
 
 	cityPath := t.TempDir()

@@ -60,8 +60,7 @@ type charHarness struct {
 // before the server exists, so all three lanes read one set).
 func newCharCity(t *testing.T, cityToml string, seed func(t *testing.T, store beads.Store)) *charHarness {
 	t.Helper()
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	t.Setenv("GC_DOLT", "skip")
 	t.Setenv("GC_HOME", t.TempDir())
 	t.Setenv("GC_DEBUG", "1") // the route=/reason= stderr line is gated on this

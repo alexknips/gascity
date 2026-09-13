@@ -43,6 +43,10 @@ func freeLoopbackPort(t *testing.T) string {
 	return strconv.Itoa(addr.Port)
 }
 
+// explicitCityPinEnvKeys are the env vars resolveExplicitCityPathEnv consults,
+// in precedence order. Any of them short-circuits the cwd walk.
+var explicitCityPinEnvKeys = []string{"GC_CITY", "GC_CITY_PATH", "GC_CITY_ROOT"}
+
 // isolateAmbientCityForTest points every ambient city lookup at a throwaway
 // city directory and returns its path.
 //
@@ -65,9 +69,24 @@ name = "isolated-test-city"
 	return cityDir
 }
 
+// isolateUnpinnedAmbientCityForTest is isolateAmbientCityForTest for tests that
+// may already pin their own city. A non-empty explicitCityPinEnvKeys value is
+// test-set (TestMain scrubs inherited ones) and already stops the cwd walk, so
+// it is kept: GC_CITY outranks GC_CITY_PATH and GC_CITY_ROOT, and overwriting
+// it would point the test at an empty throwaway city instead of its fixture.
+func isolateUnpinnedAmbientCityForTest(t *testing.T) {
+	t.Helper()
+	for _, key := range explicitCityPinEnvKeys {
+		if strings.TrimSpace(os.Getenv(key)) != "" {
+			return
+		}
+	}
+	isolateAmbientCityForTest(t)
+}
+
 // setScopedBeadsProviderForTest pins GC_BEADS to provider for the scope rooted
 // at scopeRoot, and isolates ambient city discovery for the duration of the
-// test.
+// test unless the test already pinned its own city.
 //
 // scopeRoot MUST be non-empty. An empty GC_BEADS_SCOPE_ROOT makes
 // scopedBeadsProviderOverride match ANY city unconditionally, so a test that
@@ -84,7 +103,7 @@ func setScopedBeadsProviderForTest(t *testing.T, scopeRoot, provider string) {
 			"(an empty GC_BEADS_SCOPE_ROOT matches every city, including the operator's live one); " +
 			"pass t.TempDir(), or call setUnscopedBeadsProviderForTest if the test is about the unscoped branch")
 	}
-	isolateAmbientCityForTest(t)
+	isolateUnpinnedAmbientCityForTest(t)
 	t.Setenv("GC_BEADS", provider)
 	t.Setenv("GC_BEADS_SCOPE_ROOT", scopeRoot)
 }
@@ -95,7 +114,7 @@ func setScopedBeadsProviderForTest(t *testing.T, scopeRoot, provider string) {
 // the same temp directory. Tests that drive machinery which resolves its own
 // store (the controller loop and its watchdogs) want this one. It returns the
 // isolated city's path.
-func setIsolatedBeadsProviderForTest(t *testing.T, provider string) string {
+func setIsolatedBeadsProviderForTest(t *testing.T, provider string) string { //nolint:unparam // provider mirrors setScoped/setUnscopedBeadsProviderForTest; only the controller tests call it today, all with "file".
 	t.Helper()
 	cityDir := isolateAmbientCityForTest(t)
 	t.Setenv("GC_BEADS", provider)
@@ -106,12 +125,14 @@ func setIsolatedBeadsProviderForTest(t *testing.T, provider string) string {
 // setUnscopedBeadsProviderForTest is setScopedBeadsProviderForTest for the
 // tests whose subject IS the unscoped override -- GC_BEADS set with no
 // GC_BEADS_SCOPE_ROOT, the "ambient provider" configuration. Callers must pass
-// every city and scope path to the code under test explicitly; ambient
-// discovery is pinned to a throwaway city so an accidental fallthrough lands
-// there instead of on a real store.
+// every city and scope path to the code under test explicitly. Unless the test
+// already pinned its own city, ambient discovery is pinned to a throwaway city
+// so an accidental fallthrough lands there instead of on a real store. It is
+// the only cmd/gc test code allowed to clear GC_BEADS_SCOPE_ROOT
+// (TestCmdGCTestsClearBeadsScopeRootOnlyThroughIsolationHelpers).
 func setUnscopedBeadsProviderForTest(t *testing.T, provider string) {
 	t.Helper()
-	isolateAmbientCityForTest(t)
+	isolateUnpinnedAmbientCityForTest(t)
 	t.Setenv("GC_BEADS", provider)
 	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 }
@@ -1390,8 +1411,7 @@ exit 0
 }
 
 func TestPublishManagedDoltRuntimeStateIfOwnedPublishesForInheritedBdRigUnderFileCity(t *testing.T) {
-	t.Setenv("GC_BEADS", "")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "")
 
 	cityPath := t.TempDir()
 	rigPath := filepath.Join(cityPath, "frontend")
@@ -1453,8 +1473,7 @@ prefix = "fe"
 }
 
 func TestManagedDoltLifecycleOwnedIgnoresExplicitBdRigUnderFileCity(t *testing.T) {
-	t.Setenv("GC_BEADS", "")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "")
 
 	cityPath := t.TempDir()
 	rigPath := filepath.Join(cityPath, "frontend")

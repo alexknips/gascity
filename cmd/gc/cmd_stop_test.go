@@ -416,8 +416,7 @@ func TestCmdStopExplicitRegisteredRigPathUsesSharedResolver(t *testing.T) {
 	t.Setenv("GC_CITY_PATH", "")
 	t.Setenv("GC_CITY_ROOT", "")
 	t.Setenv("GC_DIR", "")
-	t.Setenv("GC_BEADS", "")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "")
 
 	cityDir := setupCity(t, "stop-registered-rig")
 	rigDir := filepath.Join(t.TempDir(), "registered-rig")
@@ -479,7 +478,7 @@ func TestCmdStopExplicitCityPathIgnoresUnrelatedRegisteredCityLoadErrors(t *test
 			t.Setenv("GC_CITY_PATH", "")
 			t.Setenv("GC_CITY_ROOT", "")
 			t.Setenv("GC_DIR", "")
-			t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+			setUnscopedBeadsProviderForTest(t, "")
 
 			cityDir := setupCity(t, "stop-explicit-city")
 			writeRigAnywhereCityToml(t, cityDir, "[workspace]\nname = \"stop-explicit-city\"\n\n[beads]\nprovider = \"file\"\n\n[[agent]]\nname = \"worker\"\n")
@@ -552,8 +551,7 @@ func setupSupervisorManagedInvalidCity(t *testing.T) string {
 	resetFlags(t)
 	gcHome := t.TempDir()
 	t.Setenv("GC_HOME", gcHome)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := filepath.Join(t.TempDir(), "invalid-supervisor-city")
 	if err := os.MkdirAll(filepath.Join(cityDir, ".gc"), 0o755); err != nil {
@@ -722,8 +720,7 @@ func TestCmdStopJSONReportsUnregisteredTrueForSupervisorManagedCity(t *testing.T
 	resetFlags(t)
 	gcHome := t.TempDir()
 	t.Setenv("GC_HOME", gcHome)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := filepath.Join(t.TempDir(), "invalid-supervisor-city")
 	if err := os.MkdirAll(filepath.Join(cityDir, ".gc"), 0o755); err != nil {
@@ -782,8 +779,7 @@ func TestCmdStopJSONReportsUnregisteredTrueWhenSupervisorNotRunning(t *testing.T
 	resetFlags(t)
 	gcHome := shortSocketTempDir(t, "gc-home-")
 	t.Setenv("GC_HOME", gcHome)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := shortSocketTempDir(t, "gc-stop-city-")
 	if err := os.MkdirAll(filepath.Join(cityDir, ".gc"), 0o755); err != nil {
@@ -1042,8 +1038,7 @@ func TestCmdStopInvalidConfigManagedRuntimeFailsWhenShutdownFails(t *testing.T) 
 }
 
 func TestStopCityManagedBeadsProviderUsesProviderStateWhenPublishedStateIsMissing(t *testing.T) {
-	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "bd")
 
 	cityDir := t.TempDir()
 	_ = writeReachableProviderManagedDoltState(t, cityDir)
@@ -1074,8 +1069,7 @@ func setupInvalidConfigManagedRuntime(t *testing.T) string {
 	t.Helper()
 
 	t.Setenv("GC_HOME", shortSocketTempDir(t, "gc-home-"))
-	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "bd")
 	t.Setenv("GC_DOLT", "")
 
 	cityDir := t.TempDir()

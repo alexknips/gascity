@@ -206,8 +206,7 @@ func TestControllerQueryEnvOmitsCredentialsFromPrefix(t *testing.T) {
 
 func TestControllerQueryRuntimeEnvReturnsNilForNonBD(t *testing.T) {
 	cityPath := t.TempDir()
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	cfg := &config.City{
 		Workspace: config.Workspace{Name: "test-city"},
 		Agents:    []config.Agent{{Name: "worker"}},
@@ -223,8 +222,7 @@ func TestControllerQueryRuntimeEnvReturnsNilForNonBD(t *testing.T) {
 func TestControllerQueryRuntimeEnvUsesRigBdScopeUnderFileBackedCity(t *testing.T) {
 	cityPath := t.TempDir()
 	rigDir := filepath.Join(cityPath, "demo")
-	t.Setenv("GC_BEADS", "")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "")
 	t.Setenv("GC_DOLT_PASSWORD", "")
 	_ = os.Unsetenv("GC_DOLT_PASSWORD")
 	if err := os.MkdirAll(filepath.Join(rigDir, ".beads"), 0o755); err != nil {

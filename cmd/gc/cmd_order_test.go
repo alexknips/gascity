@@ -1331,8 +1331,7 @@ func TestOrderRunJSONRejectsExecWithoutRunning(t *testing.T) {
 }
 
 func TestOrderRunEventExecAdvancesCursor(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	writeFile(t, filepath.Join(cityDir, "city.toml"), `[workspace]
@@ -1377,8 +1376,7 @@ name = "test-city"
 
 func TestCmdOrderRunEventExecAdvancesCursor(t *testing.T) {
 	cityDir := t.TempDir()
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	t.Setenv("GC_EVENTS", "")
 	t.Setenv("GC_CITY", cityDir)
 	t.Setenv("GC_CITY_PATH", cityDir)
@@ -1440,8 +1438,7 @@ on = "bead.closed"
 }
 
 func TestCmdOrderSweepTrackingClosesRigScopedTrackingAfterReopen(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	rigDir := filepath.Join(cityDir, "frontend")
@@ -1509,8 +1506,7 @@ prefix = "fe"
 }
 
 func TestCmdOrderSweepTrackingClosesCityTrackingWhenRigStoreOpenFails(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	rigDir := filepath.Join(cityDir, "frontend")
@@ -1578,8 +1574,7 @@ prefix = "fe"
 }
 
 func TestSweepOrderTrackingCommandClosesAllStaleTracking(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	t.Setenv("GC_CITY", cityDir)
@@ -1646,8 +1641,7 @@ prefix = "ct"
 }
 
 func TestSweepOrderTrackingCommandPrunesClosedTrackingWithConfiguredPolicy(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	t.Setenv("GC_CITY", cityDir)
@@ -1729,8 +1723,7 @@ func TestOrderTrackingSweepErrorIsFatalForRetentionAllStoreFailure(t *testing.T)
 }
 
 func TestSweepOrderTrackingCommandIncludeWispsRequiresOrderBeforePruning(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	t.Setenv("GC_CITY", cityDir)
@@ -1794,8 +1787,7 @@ delete_after_close = "1ns"
 }
 
 func TestCmdOrderSweepTrackingTargetedCityOrderSkipsUnrelatedRigStore(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	rigDir := filepath.Join(cityDir, "frontend")
@@ -1863,8 +1855,7 @@ prefix = "fe"
 }
 
 func TestCmdOrderSweepTrackingDryRunReportsWithoutClosing(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	t.Setenv("GC_CITY", cityDir)
@@ -1920,8 +1911,7 @@ prefix = "ct"
 }
 
 func TestCmdOrderSweepTrackingFailsWhenTargetedRigStoreOpenFails(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	rigDir := filepath.Join(cityDir, "frontend")
@@ -4017,8 +4007,7 @@ formula = "mol-digest"
 		t.Fatal(err)
 	}
 	t.Setenv("GC_DOLT", "skip")
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	return cityPath
 }
 
@@ -4309,8 +4298,7 @@ func TestOrderCheckCooldownStaleEventFallsThroughToLastRunStore(t *testing.T) {
 // returns exit 1 with a descriptive message when the number of eligible deletions
 // exceeds GC_BULK_DELETE_CONFIRM_THRESHOLD and confirm=false.
 func TestOrderSweepTrackingRequiresConfirm(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	// Set threshold low (1) so a single eligible retention bead triggers the guard.
 	t.Setenv("GC_BULK_DELETE_CONFIRM_THRESHOLD", "1")
 
@@ -4417,8 +4405,7 @@ func TestOrderSweepTrackingConfirmGateFailsClosedOnCountError(t *testing.T) {
 	if err := os.WriteFile(failScript, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
 		t.Fatalf("write fail script: %v", err)
 	}
-	t.Setenv("GC_BEADS", "exec:"+failScript)
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "exec:"+failScript)
 
 	cityDir := t.TempDir()
 	t.Setenv("GC_CITY", cityDir)
@@ -4479,8 +4466,7 @@ func TestPackagedOrderTrackingSweepPassesConfirm(t *testing.T) {
 // stale-close still runs. Stale-close is sequenced before the gate precisely so
 // it can never be suppressed by it.
 func TestOrderSweepTrackingConfirmAboveThresholdSweepsAndPrunes(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	// Threshold 1 puts the 2 eligible retention beads above the gate.
 	t.Setenv("GC_BULK_DELETE_CONFIRM_THRESHOLD", "1")
 

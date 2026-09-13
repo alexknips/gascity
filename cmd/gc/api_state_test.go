@@ -858,8 +858,7 @@ provider = "bash"
 }
 
 func TestControllerStateCreateRigPokesReconciler(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"city1\"\n"), 0o644); err != nil {
@@ -898,9 +897,8 @@ func TestControllerStateCreateRigPokesReconciler(t *testing.T) {
 // and refreshed by the first create), so the name guard is actually reached
 // rather than skipped on a nil config.
 func TestControllerStateCreateRigRejectsDuplicateName(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
 	t.Setenv("GC_DOLT", "skip")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	tomlPath := filepath.Join(cityDir, "city.toml")
@@ -1040,8 +1038,7 @@ func TestControllerStateCreateRigDetectsDefaultBranchForRelativePath(t *testing.
 }
 
 func TestControllerStateCreateRigInitializesStoreBeforePublishing(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"city1\"\n"), 0o644); err != nil {
@@ -2983,8 +2980,7 @@ provider = "file"
 }
 
 func TestControllerStateBuildStoresRoutesBdRigThroughStoreFactory(t *testing.T) {
-	t.Setenv("GC_BEADS", "")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "")
 
 	prevOpen := controllerStateOpenRigStoreAtForCity
 	t.Cleanup(func() { controllerStateOpenRigStoreAtForCity = prevOpen })
@@ -3055,8 +3051,7 @@ provider = "file"
 }
 
 func TestControllerStateBuildStoresUsesRigFileMarkerUnderLegacyFileCity(t *testing.T) {
-	t.Setenv("GC_BEADS", "")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "")
 
 	cityDir := t.TempDir()
 	rigDir := filepath.Join(cityDir, "frontend")

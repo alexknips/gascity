@@ -1697,8 +1697,7 @@ func TestVerifyExternalDoltEndpointRejectsMissingLocalProjectID(t *testing.T) {
 }
 
 func TestDoRigSetEndpointAllowsBdRigUnderFileBackedCity(t *testing.T) {
-	t.Setenv("GC_BEADS", "")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "")
 
 	cityDir := t.TempDir()
 	rigDir := filepath.Join(t.TempDir(), "frontend")

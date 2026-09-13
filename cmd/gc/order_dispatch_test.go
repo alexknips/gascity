@@ -6854,8 +6854,7 @@ func TestQualifyPool(t *testing.T) {
 // --- city pack layer tests ---
 
 func TestBuildOrderDispatcherUsesProviderAwareFileStore(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	layerDir := filepath.Join(cityDir, "formulas")
@@ -6903,8 +6902,7 @@ pool = "worker"
 }
 
 func TestBuildOrderDispatcherRigOrderUsesRigFileStore(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	rigDir := filepath.Join(cityDir, "frontend")
@@ -6981,8 +6979,7 @@ pool = "worker"
 }
 
 func TestBuildOrderDispatcherRigOrderCityPoolUsesCityFileStore(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	rigDir := filepath.Join(cityDir, "frontend")
@@ -7063,8 +7060,7 @@ pool = "dog"
 }
 
 func TestBuildOrderDispatcherRigOrderHonorsLegacyCityRunHistory(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	rigDir := filepath.Join(cityDir, "frontend")
@@ -7371,8 +7367,7 @@ func TestOrderDispatchSkipsRigCooldownWhenLegacyOpenWorkReadFails(t *testing.T) 
 }
 
 func TestBuildOrderDispatcherReopensStoreForScopedFileReads(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	cityDir := t.TempDir()
 	layerDir := filepath.Join(cityDir, "formulas")

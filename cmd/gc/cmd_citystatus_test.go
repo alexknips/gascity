@@ -474,8 +474,7 @@ func TestCityStatusJSONWithAgents(t *testing.T) {
 }
 
 func TestCityStatusJSONReportsObservationErrors(t *testing.T) {
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	sp := runtime.NewFake()
 	if err := sp.Start(context.Background(), "mayor", runtime.Config{Command: "echo"}); err != nil {
@@ -1039,8 +1038,7 @@ name = "mayor"
 	if err := os.WriteFile(filepath.Join(cityPath, "city.toml"), []byte(cityToml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	return cityPath
 }
 

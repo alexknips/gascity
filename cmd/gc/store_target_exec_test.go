@@ -393,8 +393,7 @@ func TestOpenStoreAtForCityExecProjectsConfiguredTargets(t *testing.T) {
 	script := writeExecCaptureScript(t, captureDir)
 	provider := "exec:" + script
 
-	t.Setenv("GC_BEADS", provider)
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, provider)
 	t.Setenv("BEADS_DIR", "/tmp/ambient-beads")
 	t.Setenv("GC_DOLT_HOST", "ambient-dolt")
 	t.Setenv("GC_STORE_ROOT", "/tmp/ambient-store")
@@ -511,8 +510,7 @@ func TestOpenStoreAtForCityExecBeadsBdProjectsScopedExternalDoltEnv(t *testing.T
 	}
 	captureDir := t.TempDir()
 	script := writeNamedExecCaptureScript(t, captureDir, "gc-beads-bd")
-	t.Setenv("GC_BEADS", "exec:"+script)
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "exec:"+script)
 	t.Setenv("GC_DOLT_HOST", "ambient-dolt")
 	t.Setenv("GC_DOLT_PORT", "9999")
 	t.Setenv("BD_DOLT_SYNC_CLI_REMOTES", "true")
@@ -760,8 +758,7 @@ func TestOpenStoreAtForCityExecUsesUniversalStoreTargetEnv(t *testing.T) {
 	}})
 	captureDir := t.TempDir()
 	script := writeExecCaptureScript(t, captureDir)
-	t.Setenv("GC_BEADS", "exec:"+script)
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "exec:"+script)
 	t.Setenv("BEADS_DIR", "/tmp/ambient-beads")
 	t.Setenv("GC_DOLT_HOST", "ambient-dolt")
 

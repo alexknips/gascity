@@ -1005,8 +1005,7 @@ func TestCmdWorkflowDeleteSourceClosesMatchedRootsAndClearsWorkflowID(t *testing
 		t.Fatalf("write city.toml: %v", err)
 	}
 	t.Setenv("GC_CITY", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	prevCityFlag := cityFlag
 	cityFlag = ""
 	t.Cleanup(func() { cityFlag = prevCityFlag })
@@ -1101,8 +1100,7 @@ prefix = "BL"
 	writeBuiltinImportsFixture(t, cityDir, "core")
 	writeCatalogFile(t, cityDir, ".gc/site.toml", "workspace_name = \"test-city\"\n\n[[rig]]\nname = \"alpha\"\npath = \"rigs/alpha\"\n")
 	t.Setenv("GC_CITY", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	prevCityFlag := cityFlag
 	cityFlag = ""
 	t.Cleanup(func() { cityFlag = prevCityFlag })
@@ -1227,8 +1225,7 @@ func TestCmdWorkflowDeleteSourceClosesGraphV2OnlyRoot(t *testing.T) {
 		t.Fatalf("write city.toml: %v", err)
 	}
 	t.Setenv("GC_CITY", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	prevCityFlag := cityFlag
 	cityFlag = ""
 	t.Cleanup(func() { cityFlag = prevCityFlag })
@@ -1323,8 +1320,7 @@ func TestCmdWorkflowReopenSourcePreservesRouteWithoutRunTarget(t *testing.T) {
 		t.Fatalf("write city.toml: %v", err)
 	}
 	t.Setenv("GC_CITY", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	prevCityFlag := cityFlag
 	cityFlag = ""
 	t.Cleanup(func() { cityFlag = prevCityFlag })
@@ -1398,8 +1394,7 @@ func TestCmdWorkflowReopenSourceLeavesRouteBlankWhenNoRouteAvailable(t *testing.
 		t.Fatalf("write city.toml: %v", err)
 	}
 	t.Setenv("GC_CITY", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	prevCityFlag := cityFlag
 	cityFlag = ""
 	t.Cleanup(func() { cityFlag = prevCityFlag })
@@ -1451,8 +1446,7 @@ func TestCmdWorkflowReopenSourcePreRoutesToRunTarget(t *testing.T) {
 		t.Fatalf("write city.toml: %v", err)
 	}
 	t.Setenv("GC_CITY", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	prevCityFlag := cityFlag
 	cityFlag = ""
 	t.Cleanup(func() { cityFlag = prevCityFlag })
@@ -1515,8 +1509,7 @@ func TestCmdWorkflowReopenSourceConflictsWhenLiveRootExists(t *testing.T) {
 		t.Fatalf("write city.toml: %v", err)
 	}
 	t.Setenv("GC_CITY", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	prevCityFlag := cityFlag
 	cityFlag = ""
 	t.Cleanup(func() { cityFlag = prevCityFlag })
@@ -1557,8 +1550,7 @@ func TestCmdWorkflowDeleteSourcePreviewDoesNotClearStaleMetadata(t *testing.T) {
 		t.Fatalf("write city.toml: %v", err)
 	}
 	t.Setenv("GC_CITY", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	prevCityFlag := cityFlag
 	cityFlag = ""
 	t.Cleanup(func() { cityFlag = prevCityFlag })
@@ -1654,8 +1646,7 @@ func TestRunWorkflowReopenSourceConflictPropagatesExitCode(t *testing.T) {
 		t.Fatalf("write city.toml: %v", err)
 	}
 	t.Setenv("GC_CITY", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	prevCityFlag := cityFlag
 	cityFlag = ""
 	t.Cleanup(func() { cityFlag = prevCityFlag })
@@ -4631,8 +4622,7 @@ func TestOpenControlStoreAtForCityPreservesFileAndExecProviderStores(t *testing.
 	}
 
 	t.Run("file", func(t *testing.T) {
-		t.Setenv("GC_BEADS", "file")
-		t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+		setUnscopedBeadsProviderForTest(t, "file")
 		store, err := openControlStoreAtForCity(rigDir, cityDir, cfg)
 		if err != nil {
 			t.Fatalf("openControlStoreAtForCity(file): %v", err)
@@ -4647,8 +4637,7 @@ func TestOpenControlStoreAtForCityPreservesFileAndExecProviderStores(t *testing.
 		captureDir := t.TempDir()
 		script := writeExecCaptureScript(t, captureDir)
 		provider := "exec:" + script
-		t.Setenv("GC_BEADS", provider)
-		t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+		setUnscopedBeadsProviderForTest(t, provider)
 
 		store, err := openControlStoreAtForCity(rigDir, cityDir, cfg)
 		if err != nil {
@@ -6509,8 +6498,7 @@ prefix = "BL"
 	writeBuiltinImportsFixture(t, cityDir, "core")
 	writeCatalogFile(t, cityDir, ".gc/site.toml", "workspace_name = \"test-city\"\n\n[[rig]]\nname = \"alpha\"\npath = \"rigs/alpha\"\n")
 	t.Setenv("GC_CITY", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	prevCityFlag := cityFlag
 	cityFlag = ""
 	t.Cleanup(func() { cityFlag = prevCityFlag })
@@ -6628,8 +6616,7 @@ prefix = "BL"
 	writeBuiltinImportsFixture(t, cityDir, "core")
 	writeCatalogFile(t, cityDir, ".gc/site.toml", "workspace_name = \"test-city\"\n\n[[rig]]\nname = \"alpha\"\npath = \"rigs/alpha\"\n")
 	t.Setenv("GC_CITY", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	prevCityFlag := cityFlag
 	cityFlag = ""
 	t.Cleanup(func() { cityFlag = prevCityFlag })
@@ -6750,8 +6737,7 @@ prefix = "BL"
 	writeBuiltinImportsFixture(t, cityDir, "core")
 	writeCatalogFile(t, cityDir, ".gc/site.toml", "workspace_name = \"test-city\"\n\n[[rig]]\nname = \"alpha\"\npath = \"rigs/alpha\"\n")
 	t.Setenv("GC_CITY", cityDir)
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 	prevCityFlag := cityFlag
 	cityFlag = ""
 	t.Cleanup(func() { cityFlag = prevCityFlag })

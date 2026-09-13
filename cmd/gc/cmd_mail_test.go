@@ -4200,9 +4200,8 @@ func writeMailTestCity(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(cityPath, ".gc"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("GC_CITY_PATH", cityPath)
+	setUnscopedBeadsProviderForTest(t, "file")
 	cityToml := `[workspace]
 name = "test-city"
 
@@ -4720,9 +4719,8 @@ func TestRouteMailCheck_StaleBannerOver30s(t *testing.T) {
 func TestRouteMailCheckInjectUsesLocalPathForArchiveSideEffects(t *testing.T) {
 	clearInheritedBeadsEnv(t)
 	cityPath := t.TempDir()
-	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("GC_CITY_PATH", cityPath)
+	setUnscopedBeadsProviderForTest(t, "file")
 	t.Setenv("GC_DEBUG", "1")
 	t.Setenv("GC_ALIAS", "mayor")
 	t.Setenv("GC_SESSION_NAME", "mayor")

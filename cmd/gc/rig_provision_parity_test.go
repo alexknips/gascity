@@ -78,9 +78,8 @@ func assertRigAddArtifactsIdentical(t *testing.T, cityToml string, wantPacksLock
 	// The exact env the existing controller CreateRig tests run under: file
 	// provider (no managed-Dolt lifecycle) + GC_DOLT=skip guarding the
 	// contract-city branch, so no bd/Dolt process spawns.
-	t.Setenv("GC_BEADS", "file")
 	t.Setenv("GC_DOLT", "skip")
-	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	setUnscopedBeadsProviderForTest(t, "file")
 
 	// City A — CLI path.
 	cityA := t.TempDir()
