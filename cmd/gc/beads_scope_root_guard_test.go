@@ -1,0 +1,165 @@
+package main
+
+import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+// emptyBeadsScopeRootAllowedFuncs names the only cmd/gc test functions that
+// may clear GC_BEADS_SCOPE_ROOT themselves. Each pins ambient city discovery to
+// a throwaway city before it clears the scope root.
+var emptyBeadsScopeRootAllowedFuncs = map[string]bool{
+	"setUnscopedBeadsProviderForTest": true,
+}
+
+// TestCmdGCTestsClearBeadsScopeRootOnlyThroughIsolationHelpers forbids a raw
+// Setenv("GC_BEADS_SCOPE_ROOT", "") or Unsetenv("GC_BEADS_SCOPE_ROOT") in cmd/gc
+// tests (ga-bvv).
+//
+// An empty scope root makes scopedBeadsProviderOverride match every city. The
+// test binary runs from the cmd/gc package directory, so a store resolved
+// without an explicit city path falls back to findCity(cwd). From a worktree
+// under a live city that walk reaches the operator's real city.toml, and the
+// test opens and mutates the real store (ga-8iq). The isolation helpers pin
+// GC_CITY to a throwaway city first, so the guard sends every clear through
+// them.
+func TestCmdGCTestsClearBeadsScopeRootOnlyThroughIsolationHelpers(t *testing.T) {
+	pattern := filepath.Join(repoRootForLint(t), "cmd", "gc", "*_test.go")
+	paths, err := filepath.Glob(pattern)
+	if err != nil {
+		t.Fatalf("glob %s: %v", pattern, err)
+	}
+	if len(paths) == 0 {
+		t.Fatalf("glob %s matched no test files", pattern)
+	}
+
+	var offenders []string
+	for _, path := range paths {
+		fset := token.NewFileSet()
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		offenders = append(offenders, rawEmptyBeadsScopeRootClears(fset, file)...)
+	}
+	if len(offenders) > 0 {
+		t.Fatalf("%d cmd/gc test site(s) clear GC_BEADS_SCOPE_ROOT directly. An empty scope root matches "+
+			"every city, and without a GC_CITY pin the cwd walk can reach the operator's live city (ga-bvv). "+
+			"Use setIsolatedBeadsProviderForTest, setScopedBeadsProviderForTest(t, <tempdir>, provider), "+
+			"or setUnscopedBeadsProviderForTest instead:\n  %s",
+			len(offenders), strings.Join(offenders, "\n  "))
+	}
+}
+
+func TestRawEmptyBeadsScopeRootClearsDetector(t *testing.T) {
+	const src = `package main
+
+import (
+	"os"
+	"testing"
+)
+
+var packageScopeHook = func(t *testing.T) {
+	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+}
+
+func setUnscopedBeadsProviderForTest(t *testing.T, provider string) {
+	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+}
+
+func TestDirectClear(t *testing.T) {
+	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+}
+
+func TestProcessEnvClear(t *testing.T) {
+	_ = os.Setenv("GC_BEADS_SCOPE_ROOT", "")
+	_ = os.Unsetenv("GC_BEADS_SCOPE_ROOT")
+}
+
+func TestSubtestRawStringClear(t *testing.T) {
+	t.Run("child", func(t *testing.T) {
+		t.Setenv(` + "`GC_BEADS_SCOPE_ROOT`" + `, ` + "``" + `)
+	})
+}
+
+func TestAllowedShapes(t *testing.T) {
+	t.Setenv("GC_BEADS_SCOPE_ROOT", t.TempDir())
+	t.Setenv("GC_BEADS", "")
+	t.Setenv("GC_BEADS_SCOPE_ROOT_EXTRA", "")
+	key := "GC_BEADS_SCOPE_ROOT"
+	t.Setenv(key, "")
+}
+`
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "fixture_test.go", src, 0)
+	if err != nil {
+		t.Fatalf("parse fixture: %v", err)
+	}
+
+	got := rawEmptyBeadsScopeRootClears(fset, file)
+	want := []string{
+		"fixture_test.go:9: package scope",
+		"fixture_test.go:17: TestDirectClear",
+		"fixture_test.go:21: TestProcessEnvClear",
+		"fixture_test.go:22: TestProcessEnvClear",
+		"fixture_test.go:27: TestSubtestRawStringClear",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("rawEmptyBeadsScopeRootClears() =\n  %s\nwant\n  %s",
+			strings.Join(got, "\n  "), strings.Join(want, "\n  "))
+	}
+}
+
+// rawEmptyBeadsScopeRootClears returns "path:line: function" for every call in
+// file that clears GC_BEADS_SCOPE_ROOT outside emptyBeadsScopeRootAllowedFuncs.
+// It matches literal keys only; a key computed at run time is out of reach.
+func rawEmptyBeadsScopeRootClears(fset *token.FileSet, file *ast.File) []string {
+	var offenders []string
+	for _, decl := range file.Decls {
+		owner := "package scope"
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			owner = fn.Name.Name
+		}
+		if emptyBeadsScopeRootAllowedFuncs[owner] {
+			continue
+		}
+		ast.Inspect(decl, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if ok && clearsBeadsScopeRoot(call) {
+				pos := fset.Position(call.Pos())
+				offenders = append(offenders, fmt.Sprintf("%s:%d: %s", pos.Filename, pos.Line, owner))
+			}
+			return true
+		})
+	}
+	return offenders
+}
+
+func clearsBeadsScopeRoot(call *ast.CallExpr) bool {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	switch sel.Sel.Name {
+	case "Setenv":
+		return len(call.Args) == 2 && isStringLiteral(call.Args[0], "GC_BEADS_SCOPE_ROOT") && isStringLiteral(call.Args[1], "")
+	case "Unsetenv":
+		return len(call.Args) == 1 && isStringLiteral(call.Args[0], "GC_BEADS_SCOPE_ROOT")
+	}
+	return false
+}
+
+func isStringLiteral(expr ast.Expr, want string) bool {
+	lit, ok := expr.(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return false
+	}
+	value, err := strconv.Unquote(lit.Value)
+	return err == nil && value == want
+}
