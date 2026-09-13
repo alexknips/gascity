@@ -68,22 +68,25 @@ func TestBdRuntimeEnvPrefersWorkspaceSchemaSkewOverride(t *testing.T) {
 	}
 }
 
-// TestBdRuntimeEnvOmitsUnconfiguredSchemaSkewOverride keeps gc out of the
+// TestBdSchemaSkewOverrideOmittedForUnconfiguredCity keeps gc out of the
 // policy business. Unlike the auto-backup and routing opt-outs, gc never picks
-// a value here: an unconfigured city projects no key at all, so bd keeps its
-// own fail-closed default.
-func TestBdRuntimeEnvOmitsUnconfiguredSchemaSkewOverride(t *testing.T) {
+// a value here: when neither the city nor the ambient environment sets the key,
+// the projection carries no key at all, so bd keeps its own fail-closed default.
+// The ambient source is injected as absent, so the assertion holds even when
+// the test runner's own shell exports the override.
+func TestBdSchemaSkewOverrideOmittedForUnconfiguredCity(t *testing.T) {
 	cityPath := t.TempDir()
 	writeSkewCityTOML(t, cityPath)
-	// t.Setenv captures the pre-test value and restores it on cleanup, so
-	// setting then unsetting leaves the key genuinely absent for this test
-	// without leaking the change into the rest of the package.
-	t.Setenv("BD_IGNORE_SCHEMA_SKEW", "sentinel")
-	if err := os.Unsetenv("BD_IGNORE_SCHEMA_SKEW"); err != nil {
-		t.Fatal(err)
+	workspace, ok, err := workspaceEnvForCity(cityPath)
+	if err != nil {
+		t.Fatalf("workspaceEnvForCity: %v", err)
+	}
+	if !ok {
+		t.Fatal("workspaceEnvForCity found no city.toml, want the written unconfigured city")
 	}
 
-	env := mustBdRuntimeEnv(t, cityPath)
+	env := map[string]string{}
+	applyBdSchemaSkewOverrideFromWorkspace(env, workspace, func(string) (string, bool) { return "", false })
 	if got, ok := env["BD_IGNORE_SCHEMA_SKEW"]; ok {
 		t.Fatalf("BD_IGNORE_SCHEMA_SKEW = %q, want absent for an unconfigured city", got)
 	}

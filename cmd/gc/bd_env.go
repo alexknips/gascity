@@ -1906,7 +1906,7 @@ func applyWorkspaceBdEnv(env map[string]string, cityPath string) error {
 			env["BD_BIN"] = pinned
 		}
 	}
-	applyBdSchemaSkewOverrideFromWorkspace(env, workspace)
+	applyBdSchemaSkewOverrideFromWorkspace(env, workspace, os.LookupEnv)
 	return nil
 }
 
@@ -1923,21 +1923,22 @@ func applyBdSchemaSkewOverride(env map[string]string, cityPath string, workspace
 		return nil
 	}
 	if workspace != nil {
-		applyBdSchemaSkewOverrideFromWorkspace(env, expandEnvMap(workspace.Env))
+		applyBdSchemaSkewOverrideFromWorkspace(env, expandEnvMap(workspace.Env), os.LookupEnv)
 		return nil
 	}
 	loaded, _, err := workspaceEnvForCity(cityPath)
 	if err != nil {
 		return err
 	}
-	applyBdSchemaSkewOverrideFromWorkspace(env, loaded)
+	applyBdSchemaSkewOverrideFromWorkspace(env, loaded, os.LookupEnv)
 	return nil
 }
 
 // applyBdSchemaSkewOverrideFromWorkspace projects the operator's schema-skew
 // posture — the city declaration first, the ambient environment second — and
 // projects nothing at all when neither sets it, leaving bd its own fail-closed
-// default.
+// default. lookupEnv reads the ambient environment; callers pass os.LookupEnv,
+// since only a set key (even an empty one) is an operator's declared posture.
 //
 // Projecting the key explicitly instead of leaving it to inheritance is the
 // fix for ga-ili. Two classes of gc-spawned bd never see an operator's shell.
@@ -1952,7 +1953,7 @@ func applyBdSchemaSkewOverride(env map[string]string, cityPath string, workspace
 // primary store is queried with an env derived from os.Environ, which is why
 // the ambient form worked at all.) A key present in the projection survives
 // every one of these.
-func applyBdSchemaSkewOverrideFromWorkspace(env, workspace map[string]string) {
+func applyBdSchemaSkewOverrideFromWorkspace(env, workspace map[string]string, lookupEnv func(string) (string, bool)) {
 	if env == nil {
 		return
 	}
@@ -1960,7 +1961,7 @@ func applyBdSchemaSkewOverrideFromWorkspace(env, workspace map[string]string) {
 		env[bdSchemaSkewOverrideEnvKey] = value
 		return
 	}
-	if value, ok := os.LookupEnv(bdSchemaSkewOverrideEnvKey); ok {
+	if value, ok := lookupEnv(bdSchemaSkewOverrideEnvKey); ok {
 		env[bdSchemaSkewOverrideEnvKey] = value
 	}
 }
